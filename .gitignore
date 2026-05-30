@@ -1,0 +1,53 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git / local env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node / Vite / React
+node_modules/
+dist/
+.cache/
+.vite/
+.eslintcache
+
+# Go build outputs
+bin/
+build/
+coverage/
+*.out
+*.test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go workspace / vendoring
+vendor/
+go.work.sum
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Development docs
+docs/dev
