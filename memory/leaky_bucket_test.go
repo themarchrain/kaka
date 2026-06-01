@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 )
@@ -107,6 +108,48 @@ func TestNewLeakyBucket_InvalidRate(t *testing.T) {
 		}
 	}()
 	NewLeakyBucket(10, 0)
+}
+
+func TestNewLeakyBucket_NonFiniteCapacity(t *testing.T) {
+	cases := []struct {
+		name     string
+		capacity float64
+	}{
+		{name: "NaN", capacity: math.NaN()},
+		{name: "+Inf", capacity: math.Inf(1)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Error("expected panic on non-finite capacity")
+				}
+			}()
+			NewLeakyBucket(tc.capacity, 1)
+		})
+	}
+}
+
+func TestNewLeakyBucket_NonFiniteRate(t *testing.T) {
+	cases := []struct {
+		name string
+		rate float64
+	}{
+		{name: "NaN", rate: math.NaN()},
+		{name: "+Inf", rate: math.Inf(1)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Error("expected panic on non-finite rate")
+				}
+			}()
+			NewLeakyBucket(10, tc.rate)
+		})
+	}
 }
 
 func TestLeakyBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {

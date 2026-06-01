@@ -25,10 +25,10 @@ type bucket struct {
 }
 
 func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
-	if capacity < 1 {
+	if !isFinite(capacity) || capacity < 1 {
 		panic("memory: token bucket capacity must be >= 1")
 	}
-	if rate <= 0 {
+	if !isFinite(rate) || rate <= 0 {
 		panic("memory: token bucket rate must be > 0")
 	}
 
@@ -81,7 +81,7 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		b.tokens -= 1.0
 		return kaka.Result{
 			Allowed:   true,
-			Remaining: int64(b.tokens),
+			Remaining: remainingFloor(b.tokens),
 		}, nil
 	}
 

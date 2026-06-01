@@ -24,10 +24,10 @@ type leakyState struct {
 }
 
 func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
-	if capacity < 1 {
+	if !isFinite(capacity) || capacity < 1 {
 		panic("memory: leaky bucket capacity must be >= 1")
 	}
-	if rate <= 0 {
+	if !isFinite(rate) || rate <= 0 {
 		panic("memory: leaky bucket rate must be > 0")
 	}
 
@@ -82,7 +82,7 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		b.water += 1
 		return kaka.Result{
 			Allowed:   true,
-			Remaining: int64(lb.capacity - b.water),
+			Remaining: remainingFloor(lb.capacity - b.water),
 		}, nil
 	}
 	// 桶满了，溢出拒绝
