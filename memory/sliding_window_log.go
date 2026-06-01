@@ -56,7 +56,7 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	now := sw.opts.clock.Now()
 	state, err := sw.store.getOrCreate(key, now, func(now time.Time) *windowState {
 		return &windowState{
-			logs: make([]time.Time, 0),
+			logs: make([]time.Time, 0, sw.limit),
 		}
 	})
 	if err != nil {
@@ -78,7 +78,10 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 		}
 	}
 	// 从有效索引开始截取时间戳
-	state.logs = state.logs[validIndex:]
+	if validIndex > 0 {
+		n := copy(state.logs, state.logs[validIndex:])
+		state.logs = state.logs[:n]
+	}
 
 	// 判断当前有效窗口内的请求数是否达到上限
 	if len(state.logs) < sw.limit {

@@ -82,6 +82,56 @@ func TestSlidingWindow_WindowSlide(t *testing.T) {
 	}
 }
 
+func TestSlidingWindow_LogCapacityDoesNotExceedLimit(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(3, 3*time.Second, withClock(clock))
+
+	for i := 0; i < 3; i++ {
+		result, err := limiter.Allow(ctx, "user:1")
+		if err != nil {
+			t.Fatalf("unexpected error on request %d: %v", i+1, err)
+		}
+		if !result.Allowed {
+			t.Fatalf("expected request %d to be allowed", i+1)
+		}
+		clock.Advance(time.Second)
+	}
+
+	state := slidingWindowStateForTest(t, limiter, "user:1")
+	if got := cap(state.logs); got > limiter.limit {
+		t.Fatalf("expected log capacity <= limit after filling window, got cap=%d limit=%d", got, limiter.limit)
+	}
+
+	clock.Advance(500 * time.Millisecond)
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error after window slides: %v", err)
+	}
+	if !result.Allowed {
+		t.Fatal("expected request to be allowed after oldest log expires")
+	}
+
+	state = slidingWindowStateForTest(t, limiter, "user:1")
+	if got := cap(state.logs); got > limiter.limit {
+		t.Fatalf("expected log capacity <= limit after sliding window compaction, got cap=%d limit=%d", got, limiter.limit)
+	}
+}
+
+func slidingWindowStateForTest(t *testing.T, limiter *SlidingWindow, key string) *windowState {
+	t.Helper()
+
+	store, ok := limiter.store.(*mapStore[*windowState])
+	if !ok {
+		t.Fatal("expected sliding window to use mapStore in memory tests")
+	}
+	entry, ok := store.items[key]
+	if !ok {
+		t.Fatalf("expected key %q to exist in store", key)
+	}
+	return entry.value
+}
+
 func TestNewSlidingWindow_InvalidLimit(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
