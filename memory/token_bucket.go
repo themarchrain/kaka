@@ -15,7 +15,7 @@ type TokenBucket struct {
 	capacity float64 // 桶的容量（最大突发量）
 	rate     float64 // 令牌放入速率（个/秒）
 	opts     options
-	store    *keyStore[*bucket]
+	store    stateStore[*bucket]
 }
 
 // bucket 单个 key 的桶状态
@@ -43,7 +43,7 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
-		store:    newKeyStore[*bucket](o),
+		store:    newStateStore[*bucket](o),
 	}
 }
 

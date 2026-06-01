@@ -2,7 +2,12 @@ package memory
 
 import "time"
 
-type keyStore[T any] struct {
+type stateStore[T any] interface {
+	getOrCreate(key string, now time.Time, create func(time.Time) T) (T, error)
+	len() int
+}
+
+type mapStore[T any] struct {
 	items       map[string]*keyEntry[T]
 	opts        options
 	lastCleanup time.Time
@@ -13,14 +18,18 @@ type keyEntry[T any] struct {
 	lastSeen time.Time
 }
 
-func newKeyStore[T any](opts options) *keyStore[T] {
-	return &keyStore[T]{
+func newStateStore[T any](opts options) stateStore[T] {
+	return newMapStore[T](opts)
+}
+
+func newMapStore[T any](opts options) *mapStore[T] {
+	return &mapStore[T]{
 		items: make(map[string]*keyEntry[T]),
 		opts:  opts,
 	}
 }
 
-func (s *keyStore[T]) getOrCreate(key string, now time.Time, create func(time.Time) T) (T, error) {
+func (s *mapStore[T]) getOrCreate(key string, now time.Time, create func(time.Time) T) (T, error) {
 	if entry, ok := s.items[key]; ok {
 		entry.lastSeen = now
 		return entry.value, nil
@@ -40,13 +49,13 @@ func (s *keyStore[T]) getOrCreate(key string, now time.Time, create func(time.Ti
 	return value, nil
 }
 
-func (s *keyStore[T]) len() int {
+func (s *mapStore[T]) len() int {
 	return len(s.items)
 }
 
 // cleanup 在 keyTTL 和 cleanupInterval 都启用时，按批次清理过期 key
 // 调用方必须直接或间接持有 mutex
-func (s *keyStore[T]) cleanup(now time.Time) {
+func (s *mapStore[T]) cleanup(now time.Time) {
 	if s.opts.keyTTL <= 0 || s.opts.cleanupInterval <= 0 {
 		return
 	}

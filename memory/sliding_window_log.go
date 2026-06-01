@@ -15,7 +15,7 @@ type SlidingWindow struct {
 	limit  int           // 窗口内允许的最大请求数
 	window time.Duration // 窗口大小 (如 1 * time.Second)
 	opts   options
-	store  *keyStore[*windowState]
+	store  stateStore[*windowState]
 }
 
 type windowState struct {
@@ -41,7 +41,7 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 		limit:  limit,
 		window: window,
 		opts:   o,
-		store:  newKeyStore[*windowState](o),
+		store:  newStateStore[*windowState](o),
 	}
 }
 

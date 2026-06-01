@@ -15,7 +15,7 @@ type LeakyBucket struct {
 	capacity float64 // 桶的容量（最大积压量）
 	rate     float64 // 漏水速率（滴/秒）
 	opts     options
-	store    *keyStore[*leakyState]
+	store    stateStore[*leakyState]
 }
 
 type leakyState struct {
@@ -42,7 +42,7 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
-		store:    newKeyStore[*leakyState](o),
+		store:    newStateStore[*leakyState](o),
 	}
 }
 

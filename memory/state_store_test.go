@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
-func TestKeyStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) {
-	store := newKeyStore[*bucket](options{
+var _ stateStore[*bucket] = (*mapStore[*bucket])(nil)
+
+func TestMapStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) {
+	store := newMapStore[*bucket](options{
 		maxKeys:         1,
 		keyTTL:          100 * time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
@@ -39,8 +41,8 @@ func TestKeyStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) 
 	}
 }
 
-func TestKeyStore_GetOrCreate_CleansExpiredKeysBeforeMaxKeysCheck(t *testing.T) {
-	store := newKeyStore[*bucket](options{
+func TestMapStore_GetOrCreate_CleansExpiredKeysBeforeMaxKeysCheck(t *testing.T) {
+	store := newMapStore[*bucket](options{
 		maxKeys:         1,
 		keyTTL:          100 * time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
@@ -68,8 +70,8 @@ func TestKeyStore_GetOrCreate_CleansExpiredKeysBeforeMaxKeysCheck(t *testing.T) 
 	}
 }
 
-func TestKeyStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
-	store := newKeyStore[*bucket](options{maxKeys: 1})
+func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
+	store := newMapStore[*bucket](options{maxKeys: 1})
 	now := time.Now()
 
 	_, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
