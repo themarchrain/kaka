@@ -5,6 +5,17 @@ import (
 	"time"
 )
 
+func isFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func remainingFloor(value float64) int64 {
+	if value <= 0 {
+		return 0
+	}
+	return int64(value)
+}
+
 func durationFromSecondsCeil(seconds float64) time.Duration {
 	if seconds <= 0 {
 		return 0
