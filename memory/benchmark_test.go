@@ -141,6 +141,24 @@ func BenchmarkSlidingWindowAllowManyKeys(b *testing.B) {
 	}
 }
 
+func BenchmarkSlidingWindowAllowWithCompaction(b *testing.B) {
+	ctx := context.Background()
+	clock := &benchmarkClock{now: time.Unix(100, 0)}
+	limiter := NewSlidingWindow(128, 64*time.Millisecond, withClock(clock))
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		result, err := limiter.Allow(ctx, "user:1")
+		if err != nil {
+			b.Fatal(err)
+		}
+		_ = result.Allowed
+		clock.Advance(time.Millisecond)
+	}
+}
+
 func BenchmarkTokenBucketAllowParallel(b *testing.B) {
 	ctx := context.Background()
 	limiter := NewTokenBucket(float64(b.N)+1, 1)
