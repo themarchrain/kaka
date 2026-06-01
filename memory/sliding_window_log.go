@@ -46,6 +46,10 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 }
 
 func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, error) {
+	if err := validateKey(key); err != nil {
+		return kaka.Result{}, err
+	}
+
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 

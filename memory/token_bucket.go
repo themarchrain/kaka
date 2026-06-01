@@ -48,6 +48,10 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 }
 
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
+	if err := validateKey(key); err != nil {
+		return kaka.Result{}, err
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 

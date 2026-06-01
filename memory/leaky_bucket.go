@@ -47,6 +47,10 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 }
 
 func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
+	if err := validateKey(key); err != nil {
+		return kaka.Result{}, err
+	}
+
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
