@@ -92,7 +92,8 @@ func TestTokenBucket_AllowsAtExactRetryAfterBoundary(t *testing.T) {
 
 func TestTokenBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewTokenBucket(1, 2e9)
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(1, 2e9, withClock(clock))
 
 	first, err := limiter.Allow(ctx, "user:1")
 	if err != nil {
@@ -116,7 +117,8 @@ func TestTokenBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
 
 func TestLeakyBucket_ResultFields(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewLeakyBucket(3, 0.25)
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(3, 0.25, withClock(clock))
 
 	for i, wantRemaining := range []int64{2, 1, 0} {
 		result, err := limiter.Allow(ctx, "user:1")
@@ -210,7 +212,8 @@ func TestLeakyBucket_AllowsAtExactRetryAfterBoundary(t *testing.T) {
 
 func TestLeakyBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewLeakyBucket(1, 2e9)
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(1, 2e9, withClock(clock))
 
 	first, err := limiter.Allow(ctx, "user:1")
 	if err != nil {
