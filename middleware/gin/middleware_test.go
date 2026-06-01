@@ -145,8 +145,9 @@ func TestMiddlewareUsesCustomKeyFunc(t *testing.T) {
 func TestMiddlewareFailsOpenOnLimiterError(t *testing.T) {
 	gonic.SetMode(gonic.TestMode)
 
+	expectedErr := errors.New("limiter unavailable")
 	limiter := &stubLimiter{
-		err: errors.New("limiter unavailable"),
+		err: expectedErr,
 	}
 	router := gonic.New()
 	router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
@@ -163,4 +164,75 @@ func TestMiddlewareFailsOpenOnLimiterError(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("expected fail-open status %d, got %d", http.StatusNoContent, recorder.Code)
 	}
+}
+
+func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
+	gonic.SetMode(gonic.TestMode)
+
+	expectedErr := errors.New("limiter unavailable")
+	limiter := &stubLimiter{
+		err: expectedErr,
+	}
+	var handledErr error
+	router := gonic.New()
+	router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
+		Limiter: limiter,
+		ErrorHandler: func(c *gonic.Context, err error) {
+			handledErr = err
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+		},
+	}))
+	router.GET("/", func(c *gonic.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	router.ServeHTTP(recorder, request)
+
+	if !errors.Is(handledErr, expectedErr) {
+		t.Fatalf("expected handler error %v, got %v", expectedErr, handledErr)
+	}
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, recorder.Code)
+	}
+}
+
+func TestMiddlewareFailsOpenOnBlankKeyError(t *testing.T) {
+	gonic.SetMode(gonic.TestMode)
+
+	limiter := &stubLimiter{
+		err: errors.New("invalid key"),
+	}
+	router := gonic.New()
+	router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
+		Limiter: limiter,
+		KeyFunc: func(c *gonic.Context) string {
+			return "   "
+		},
+	}))
+	router.GET("/", func(c *gonic.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	router.ServeHTTP(recorder, request)
+
+	if limiter.key != "   " {
+		t.Fatalf("expected blank key to be passed to limiter, got %q", limiter.key)
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected blank key limiter error to fail open with status %d, got %d", http.StatusNoContent, recorder.Code)
+	}
+}
+
+func TestMiddlewarePanicsWithoutLimiter(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic without limiter")
+		}
+	}()
+
+	_ = ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{})
 }

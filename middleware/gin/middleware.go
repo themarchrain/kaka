@@ -23,6 +23,10 @@ type Config struct {
 	// 默认返回 429 Too Many Requests
 	DeniedHandler func(c *gin.Context)
 
+	// ErrorHandler 限流器返回 error 时的自定义处理函数
+	// 默认 fail-open
+	ErrorHandler func(c *gin.Context, err error)
+
 	// Headers 是否设置 X-RateLimit-* 响应头
 	// 默认 true
 	//
@@ -37,6 +41,9 @@ type Config struct {
 
 // NewLimiterMiddleware 创建 Gin 限流中间件
 func NewLimiterMiddleware(config Config) gin.HandlerFunc {
+	if config.Limiter == nil {
+		panic("gin middleware: limiter must not be nil")
+	}
 	// 设置默认值
 	if config.KeyFunc == nil {
 		config.KeyFunc = func(c *gin.Context) string {
@@ -55,6 +62,10 @@ func NewLimiterMiddleware(config Config) gin.HandlerFunc {
 
 		result, err := config.Limiter.Allow(c.Request.Context(), key)
 		if err != nil {
+			if config.ErrorHandler != nil {
+				config.ErrorHandler(c, err)
+				return
+			}
 			// 限流器内部错误，放行请求（降级策略）
 			c.Next()
 			return
