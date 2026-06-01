@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.module }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - .
+          - middleware/gin
+          - middleware/http
+          - examples/http-example
+          - examples/gin-example
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work
+            **/go.mod
+            **/go.sum
+
+      - name: Run tests
+        working-directory: ${{ matrix.module }}
+        run: go test -count=1 ./...
+
+      - name: Run race tests
+        if: matrix.module == '.'
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 ./...
