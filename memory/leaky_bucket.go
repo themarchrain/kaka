@@ -8,23 +8,43 @@ import (
 	"github.com/themarchrain/kaka"
 )
 
+var _ kaka.Limiter = (*LeakyBucket)(nil)
+
 type LeakyBucket struct {
-	mu       sync.Mutex
-	capacity float64                // 桶的容量（最大积压量）
-	rate     float64                // 漏水速率（滴/秒）
-	buckets  map[string]*leakyState // 按 key 存储桶状态
+	mu          sync.Mutex
+	capacity    float64                // 桶的容量（最大积压量）
+	rate        float64                // 漏水速率（滴/秒）
+	buckets     map[string]*leakyState // 按 key 存储桶状态
+	opts        options
+	lastCleanup time.Time
 }
 
 type leakyState struct {
 	water    float64   // 当前桶里的水量
 	lastLeak time.Time // 上次漏水的时间
+	lastSeen time.Time // 最后一次被访问（用于 TTL 清理）
 }
 
-func NewLeakyBucket(capacity, rate float64) *LeakyBucket {
+func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
+	if capacity <= 0 {
+		panic("memory: leaky bucket capacity must be > 0")
+	}
+	if rate <= 0 {
+		panic("memory: leaky bucket rate must be > 0")
+	}
+
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+	o.applyDefaults()
+	o.validate()
+
 	return &LeakyBucket{
 		capacity: capacity,
 		rate:     rate,
 		buckets:  make(map[string]*leakyState),
+		opts:     o,
 	}
 }
 
@@ -34,11 +54,19 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 
 	b, exists := lb.buckets[key]
 	if !exists {
+		lb.lazyCleanup()
+		if lb.opts.maxKeys > 0 && len(lb.buckets) >= lb.opts.maxKeys {
+			return kaka.Result{}, ErrMaxKeysExceeded
+		}
+		now := time.Now()
 		b = &leakyState{
 			water:    0, // 初始空桶
-			lastLeak: time.Now(),
+			lastLeak: now,
+			lastSeen: now,
 		}
 		lb.buckets[key] = b
+	} else {
+		b.lastSeen = time.Now()
 	}
 
 	now := time.Now()
@@ -70,4 +98,32 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		Remaining:  0,
 		RetryAfter: retryAfter,
 	}, nil
+}
+
+// lazyCleanup 在 keyTTL 和 cleanupInterval 都启用时，按批次清理过期 key
+// 调用方必须持有 lb.mu
+func (lb *LeakyBucket) lazyCleanup() {
+	if lb.opts.keyTTL <= 0 || lb.opts.cleanupInterval <= 0 {
+		return
+	}
+	now := time.Now()
+	if now.Sub(lb.lastCleanup) < lb.opts.cleanupInterval {
+		return
+	}
+	lb.lastCleanup = now
+
+	expired := make([]string, 0, cleanupBatchSize)
+	scanned := 0
+	for k, b := range lb.buckets {
+		if scanned >= cleanupBatchSize {
+			break
+		}
+		scanned++
+		if now.Sub(b.lastSeen) >= lb.opts.keyTTL {
+			expired = append(expired, k)
+		}
+	}
+	for _, k := range expired {
+		delete(lb.buckets, k)
+	}
 }

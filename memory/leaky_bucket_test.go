@@ -80,3 +80,107 @@ func TestLeakyBucket_Leak(t *testing.T) {
 		t.Error("expected request to be allowed after water leaks")
 	}
 }
+
+func TestNewLeakyBucket_InvalidCapacity(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on capacity <= 0")
+		}
+	}()
+	NewLeakyBucket(0, 1)
+}
+
+func TestNewLeakyBucket_InvalidRate(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on rate <= 0")
+		}
+	}()
+	NewLeakyBucket(10, 0)
+}
+
+func TestLeakyBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewLeakyBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(100*time.Millisecond),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	time.Sleep(160 * time.Millisecond)
+
+	result, err := limiter.Allow(ctx, "user:3")
+	if err != nil {
+		t.Fatalf("expected no error after cleanup, got %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:3 to be allowed after expired keys cleaned up")
+	}
+}
+
+func TestLeakyBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewLeakyBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(10*time.Second),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	time.Sleep(100 * time.Millisecond)
+
+	_, err := limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded for unexpired keys, got %v", err)
+	}
+}
+
+func TestLeakyBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewLeakyBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(200*time.Millisecond),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	limiter.Allow(ctx, "user:1")
+
+	time.Sleep(100 * time.Millisecond)
+	limiter.Allow(ctx, "user:1")
+
+	time.Sleep(150 * time.Millisecond)
+
+	limiter.Allow(ctx, "user:2")
+
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error for refreshed key: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:1 to be allowed after lastSeen refresh")
+	}
+}
+
+func TestLeakyBucket_Cleanup_IntervalNotReached(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewLeakyBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(50*time.Millisecond),
+		WithCleanupInterval(10*time.Second),
+	)
+
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	time.Sleep(100 * time.Millisecond)
+
+	_, err := limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded when cleanupInterval not reached, got %v", err)
+	}
+}

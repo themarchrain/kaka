@@ -80,3 +80,259 @@ func TestTokenBucket_TokenRefill(t *testing.T) {
 		t.Error("expected request to be allowed after token refill")
 	}
 }
+
+func TestNewTokenBucket_InvalidCapacity(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on capacity <= 0")
+		}
+	}()
+	NewTokenBucket(0, 1)
+}
+
+func TestNewTokenBucket_InvalidRate(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on rate <= 0")
+		}
+	}()
+	NewTokenBucket(10, 0)
+}
+
+func TestNewTokenBucket_DefaultOptions(t *testing.T) {
+	limiter := NewTokenBucket(10, 1)
+	if limiter.opts.maxKeys != 0 {
+		t.Errorf("expected maxKeys=0, got %d", limiter.opts.maxKeys)
+	}
+	if limiter.opts.keyTTL != 0 {
+		t.Errorf("expected keyTTL=0, got %v", limiter.opts.keyTTL)
+	}
+	if limiter.opts.cleanupInterval != 0 {
+		t.Errorf("expected cleanupInterval=0, got %v", limiter.opts.cleanupInterval)
+	}
+}
+
+func TestNewTokenBucket_WithOptions(t *testing.T) {
+	limiter := NewTokenBucket(10, 1,
+		WithMaxKeys(1000),
+		WithKeyTTL(5*time.Minute),
+		WithCleanupInterval(time.Minute),
+	)
+	if limiter.opts.maxKeys != 1000 {
+		t.Errorf("expected maxKeys=1000, got %d", limiter.opts.maxKeys)
+	}
+	if limiter.opts.keyTTL != 5*time.Minute {
+		t.Errorf("expected keyTTL=5m, got %v", limiter.opts.keyTTL)
+	}
+	if limiter.opts.cleanupInterval != time.Minute {
+		t.Errorf("expected cleanupInterval=1m, got %v", limiter.opts.cleanupInterval)
+	}
+}
+
+func TestOptions_InvalidMaxKeys(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on maxKeys < 0")
+		}
+	}()
+	NewTokenBucket(10, 1, WithMaxKeys(-1))
+}
+
+func TestOptions_InvalidKeyTTL(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on keyTTL < 0")
+		}
+	}()
+	NewTokenBucket(10, 1, WithKeyTTL(-1*time.Second))
+}
+
+func TestOptions_InvalidCleanupInterval(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on cleanupInterval < 0")
+		}
+	}()
+	NewTokenBucket(10, 1, WithCleanupInterval(-1*time.Second))
+}
+
+func TestNewTokenBucket_CleanupIntervalDefault(t *testing.T) {
+	// 设置 keyTTL 但未设置 cleanupInterval，默认应为 1 分钟
+	limiter := NewTokenBucket(10, 1, WithKeyTTL(5*time.Minute))
+	if limiter.opts.cleanupInterval != time.Minute {
+		t.Errorf("expected default cleanupInterval=1m, got %v", limiter.opts.cleanupInterval)
+	}
+
+	// 显式设置 cleanupInterval 时不覆盖
+	limiter2 := NewTokenBucket(10, 1, WithKeyTTL(5*time.Minute), WithCleanupInterval(30*time.Second))
+	if limiter2.opts.cleanupInterval != 30*time.Second {
+		t.Errorf("expected cleanupInterval=30s, got %v", limiter2.opts.cleanupInterval)
+	}
+
+	// 没有 keyTTL 时不设置
+	limiter3 := NewTokenBucket(10, 1)
+	if limiter3.opts.cleanupInterval != 0 {
+		t.Errorf("expected cleanupInterval=0, got %v", limiter3.opts.cleanupInterval)
+	}
+}
+
+func TestTokenBucket_MaxKeys(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewTokenBucket(10, 1, WithMaxKeys(2))
+
+	// 第一个 key 应该正常放行
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:1 to be allowed")
+	}
+
+	// 第二个 key 应该正常放行
+	result, err = limiter.Allow(ctx, "user:2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:2 to be allowed")
+	}
+
+	// 第三个新 key 应该返回 ErrMaxKeysExceeded
+	_, err = limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded, got %v", err)
+	}
+
+	// 已有 key 应该继续按限流逻辑运行
+	result, err = limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error for existing key: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected existing user:1 to still be allowed")
+	}
+
+	// maxKeys=0 表示不限制
+	limiter2 := NewTokenBucket(10, 1, WithMaxKeys(0))
+	for i := 0; i < 100; i++ {
+		_, err := limiter2.Allow(ctx, "user:"+string(rune('a'+i%26))+string(rune('0'+i/26)))
+		if err != nil {
+			t.Fatalf("unexpected error with maxKeys=0: %v", err)
+		}
+	}
+}
+
+func TestTokenBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
+	ctx := context.Background()
+	// TTL=100ms, cleanupInterval=50ms
+	limiter := NewTokenBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(100*time.Millisecond),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	// 创建两个 key
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	// 等待 key 过期 + 超过 cleanupInterval
+	time.Sleep(160 * time.Millisecond)
+
+	// 新 key 应该能进入，因为过期 key 已被清理
+	result, err := limiter.Allow(ctx, "user:3")
+	if err != nil {
+		t.Fatalf("expected no error after cleanup, got %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:3 to be allowed after expired keys cleaned up")
+	}
+}
+
+func TestTokenBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
+	ctx := context.Background()
+	// TTL=10s, cleanupInterval=50ms
+	limiter := NewTokenBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(10*time.Second),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	// 创建两个 key
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	// 等待超过 cleanupInterval 但未超过 TTL
+	time.Sleep(100 * time.Millisecond)
+
+	// 新 key 不应该能进入，因为 key 未过期
+	_, err := limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded for unexpired keys, got %v", err)
+	}
+
+	// 原有 key 应该继续正常工作
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error for existing key: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:1 to still be allowed")
+	}
+}
+
+func TestTokenBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
+	ctx := context.Background()
+	// TTL=200ms, cleanupInterval=50ms
+	limiter := NewTokenBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(200*time.Millisecond),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	// 创建 key
+	limiter.Allow(ctx, "user:1")
+
+	// 100ms 后访问一次，刷新 lastSeen
+	time.Sleep(100 * time.Millisecond)
+	limiter.Allow(ctx, "user:1")
+
+	// 再等 150ms（距首次 250ms，但距最后访问只有 150ms < TTL=200ms）
+	time.Sleep(150 * time.Millisecond)
+
+	// 创建新 key，触发清理
+	// user:1 不应该被清理，因为 lastSeen 被刷新了
+	limiter.Allow(ctx, "user:2")
+
+	// user:1 应该还能用
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error for refreshed key: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:1 to be allowed after lastSeen refresh")
+	}
+}
+
+func TestTokenBucket_Cleanup_IntervalNotReached(t *testing.T) {
+	ctx := context.Background()
+	// TTL=50ms, cleanupInterval=10s（很长的间隔）
+	limiter := NewTokenBucket(10, 1,
+		WithMaxKeys(2),
+		WithKeyTTL(50*time.Millisecond),
+		WithCleanupInterval(10*time.Second),
+	)
+
+	// 创建两个 key
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	// 等待 key 过期
+	time.Sleep(100 * time.Millisecond)
+
+	// cleanupInterval 未到，不应该清理
+	_, err := limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded when cleanupInterval not reached, got %v", err)
+	}
+}

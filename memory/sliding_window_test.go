@@ -80,3 +80,107 @@ func TestSlidingWindow_WindowSlide(t *testing.T) {
 		t.Error("expected request to be allowed after window slides")
 	}
 }
+
+func TestNewSlidingWindow_InvalidLimit(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on limit <= 0")
+		}
+	}()
+	NewSlidingWindow(0, time.Second)
+}
+
+func TestNewSlidingWindow_InvalidWindow(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on window <= 0")
+		}
+	}()
+	NewSlidingWindow(3, 0)
+}
+
+func TestSlidingWindow_Cleanup_ExpiredKeyRemoved(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewSlidingWindow(5, time.Second,
+		WithMaxKeys(2),
+		WithKeyTTL(100*time.Millisecond),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	time.Sleep(160 * time.Millisecond)
+
+	result, err := limiter.Allow(ctx, "user:3")
+	if err != nil {
+		t.Fatalf("expected no error after cleanup, got %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:3 to be allowed after expired keys cleaned up")
+	}
+}
+
+func TestSlidingWindow_Cleanup_UnexpiredKeyKept(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewSlidingWindow(5, time.Second,
+		WithMaxKeys(2),
+		WithKeyTTL(10*time.Second),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	time.Sleep(100 * time.Millisecond)
+
+	_, err := limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded for unexpired keys, got %v", err)
+	}
+}
+
+func TestSlidingWindow_Cleanup_LastSeenRefreshed(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewSlidingWindow(5, time.Second,
+		WithMaxKeys(2),
+		WithKeyTTL(200*time.Millisecond),
+		WithCleanupInterval(50*time.Millisecond),
+	)
+
+	limiter.Allow(ctx, "user:1")
+
+	time.Sleep(100 * time.Millisecond)
+	limiter.Allow(ctx, "user:1")
+
+	time.Sleep(150 * time.Millisecond)
+
+	limiter.Allow(ctx, "user:2")
+
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error for refreshed key: %v", err)
+	}
+	if !result.Allowed {
+		t.Error("expected user:1 to be allowed after lastSeen refresh")
+	}
+}
+
+func TestSlidingWindow_Cleanup_IntervalNotReached(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewSlidingWindow(5, time.Second,
+		WithMaxKeys(2),
+		WithKeyTTL(50*time.Millisecond),
+		WithCleanupInterval(10*time.Second),
+	)
+
+	limiter.Allow(ctx, "user:1")
+	limiter.Allow(ctx, "user:2")
+
+	time.Sleep(100 * time.Millisecond)
+
+	_, err := limiter.Allow(ctx, "user:3")
+	if err != ErrMaxKeysExceeded {
+		t.Errorf("expected ErrMaxKeysExceeded when cleanupInterval not reached, got %v", err)
+	}
+}
