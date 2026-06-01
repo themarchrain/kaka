@@ -2,7 +2,9 @@ package gin
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/themarchrain/kaka"
@@ -23,7 +25,14 @@ type Config struct {
 
 	// Headers 是否设置 X-RateLimit-* 响应头
 	// 默认 true
+	//
+	// Deprecated: use DisableHeaders to turn headers off. This field is kept for
+	// source compatibility and no longer controls the default header behavior.
 	Headers bool
+
+	// DisableHeaders 是否禁用 X-RateLimit-* 响应头
+	// 默认 false，表示写入响应头
+	DisableHeaders bool
 }
 
 // NewLimiterMiddleware 创建 Gin 限流中间件
@@ -41,10 +50,6 @@ func NewLimiterMiddleware(config Config) gin.HandlerFunc {
 			})
 		}
 	}
-	if !config.Headers {
-		config.Headers = true
-	}
-
 	return func(c *gin.Context) {
 		key := config.KeyFunc(c)
 
@@ -56,10 +61,10 @@ func NewLimiterMiddleware(config Config) gin.HandlerFunc {
 		}
 
 		// 设置响应头
-		if config.Headers {
+		if !config.DisableHeaders {
 			c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", result.Remaining))
-			if !result.Allowed {
-				c.Header("Retry-After", fmt.Sprintf("%d", int(result.RetryAfter.Seconds())))
+			if !result.Allowed && result.RetryAfter > 0 {
+				c.Header("Retry-After", fmt.Sprintf("%d", retryAfterSeconds(result.RetryAfter)))
 			}
 		}
 
@@ -70,4 +75,12 @@ func NewLimiterMiddleware(config Config) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func retryAfterSeconds(d time.Duration) int {
+	seconds := int(math.Ceil(d.Seconds()))
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
