@@ -11,17 +11,15 @@ import (
 var _ kaka.Limiter = (*SlidingWindow)(nil)
 
 type SlidingWindow struct {
-	mu          sync.Mutex
-	limit       int                     // 窗口内允许的最大请求数
-	window      time.Duration           // 窗口大小 (如 1 * time.Second)
-	buckets     map[string]*windowState // 按 key 存储窗口状态
-	opts        options
-	lastCleanup time.Time
+	mu     sync.Mutex
+	limit  int           // 窗口内允许的最大请求数
+	window time.Duration // 窗口大小 (如 1 * time.Second)
+	opts   options
+	store  *keyStore[*windowState]
 }
 
 type windowState struct {
-	logs     []time.Time // 记录请求时间戳的日志切片
-	lastSeen time.Time   // 最后一次被访问（用于 TTL 清理）
+	logs []time.Time // 记录请求时间戳的日志切片
 }
 
 func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingWindow {
@@ -40,10 +38,10 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 	o.validate()
 
 	return &SlidingWindow{
-		limit:   limit,
-		window:  window,
-		buckets: make(map[string]*windowState),
-		opts:    o,
+		limit:  limit,
+		window: window,
+		opts:   o,
+		store:  newKeyStore[*windowState](o),
 	}
 }
 
@@ -51,23 +49,16 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 
-	state, exists := sw.buckets[key]
-	if !exists {
-		sw.lazyCleanup()
-		if sw.opts.maxKeys > 0 && len(sw.buckets) >= sw.opts.maxKeys {
-			return kaka.Result{}, ErrMaxKeysExceeded
+	now := time.Now()
+	state, err := sw.store.getOrCreate(key, now, func(now time.Time) *windowState {
+		return &windowState{
+			logs: make([]time.Time, 0),
 		}
-		now := time.Now()
-		state = &windowState{
-			logs:     make([]time.Time, 0),
-			lastSeen: now,
-		}
-		sw.buckets[key] = state
-	} else {
-		state.lastSeen = time.Now()
+	})
+	if err != nil {
+		return kaka.Result{}, err
 	}
 
-	now := time.Now()
 	windowStart := now.Add(-sw.window)
 
 	// 查找第一个在窗口内的时间戳索引
@@ -103,32 +94,4 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 		Remaining:  0,
 		RetryAfter: retryAfter,
 	}, nil
-}
-
-// lazyCleanup 在 keyTTL 和 cleanupInterval 都启用时，按批次清理过期 key
-// 调用方必须持有 sw.mu
-func (sw *SlidingWindow) lazyCleanup() {
-	if sw.opts.keyTTL <= 0 || sw.opts.cleanupInterval <= 0 {
-		return
-	}
-	now := time.Now()
-	if now.Sub(sw.lastCleanup) < sw.opts.cleanupInterval {
-		return
-	}
-	sw.lastCleanup = now
-
-	expired := make([]string, 0, cleanupBatchSize)
-	scanned := 0
-	for k, s := range sw.buckets {
-		if scanned >= cleanupBatchSize {
-			break
-		}
-		scanned++
-		if now.Sub(s.lastSeen) >= sw.opts.keyTTL {
-			expired = append(expired, k)
-		}
-	}
-	for _, k := range expired {
-		delete(sw.buckets, k)
-	}
 }

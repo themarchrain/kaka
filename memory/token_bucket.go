@@ -11,19 +11,17 @@ import (
 var _ kaka.Limiter = (*TokenBucket)(nil)
 
 type TokenBucket struct {
-	mu          sync.Mutex
-	capacity    float64            // 桶的容量（最大突发量）
-	rate        float64            // 令牌放入速率（个/秒）
-	buckets     map[string]*bucket // 按 key 存储桶状态
-	opts        options
-	lastCleanup time.Time // 上次触发清理的时间
+	mu       sync.Mutex
+	capacity float64 // 桶的容量（最大突发量）
+	rate     float64 // 令牌放入速率（个/秒）
+	opts     options
+	store    *keyStore[*bucket]
 }
 
 // bucket 单个 key 的桶状态
 type bucket struct {
 	tokens       float64   // 当前令牌数量
 	lastRefilled time.Time // 上次补充令牌的时间
-	lastSeen     time.Time // 最后一次被访问（用于 TTL 清理）
 }
 
 func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
@@ -44,8 +42,8 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 	return &TokenBucket{
 		capacity: capacity,
 		rate:     rate,
-		buckets:  make(map[string]*bucket),
 		opts:     o,
+		store:    newKeyStore[*bucket](o),
 	}
 }
 
@@ -53,25 +51,17 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
-	b, exists := tb.buckets[key]
-	if !exists {
-		// 新 key 前先触发惰性清理
-		tb.lazyCleanup()
-		if tb.opts.maxKeys > 0 && len(tb.buckets) >= tb.opts.maxKeys {
-			return kaka.Result{}, ErrMaxKeysExceeded
-		}
-		now := time.Now()
-		b = &bucket{
+	now := time.Now()
+	b, err := tb.store.getOrCreate(key, now, func(now time.Time) *bucket {
+		return &bucket{
 			tokens:       tb.capacity, // 初始默认满桶
 			lastRefilled: now,
-			lastSeen:     now,
 		}
-		tb.buckets[key] = b
-	} else {
-		b.lastSeen = time.Now()
+	})
+	if err != nil {
+		return kaka.Result{}, err
 	}
 
-	now := time.Now()
 	// 计算距离上次请求过去了多久，并计算这段时间应该生成多少新令牌
 	elapsed := now.Sub(b.lastRefilled).Seconds()
 	b.tokens += elapsed * tb.rate
@@ -98,32 +88,4 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		Remaining:  0,
 		RetryAfter: retryAfter,
 	}, nil
-}
-
-// lazyCleanup 在 keyTTL 和 cleanupInterval 都启用时，按批次清理过期 key
-// 调用方必须持有 tb.mu
-func (tb *TokenBucket) lazyCleanup() {
-	if tb.opts.keyTTL <= 0 || tb.opts.cleanupInterval <= 0 {
-		return
-	}
-	now := time.Now()
-	if now.Sub(tb.lastCleanup) < tb.opts.cleanupInterval {
-		return
-	}
-	tb.lastCleanup = now
-
-	expired := make([]string, 0, cleanupBatchSize)
-	scanned := 0
-	for k, b := range tb.buckets {
-		if scanned >= cleanupBatchSize {
-			break
-		}
-		scanned++
-		if now.Sub(b.lastSeen) >= tb.opts.keyTTL {
-			expired = append(expired, k)
-		}
-	}
-	for _, k := range expired {
-		delete(tb.buckets, k)
-	}
 }
