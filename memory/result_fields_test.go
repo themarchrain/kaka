@@ -58,6 +58,38 @@ func TestTokenBucket_ResultFields(t *testing.T) {
 	}
 }
 
+func TestTokenBucket_AllowsAtExactRetryAfterBoundary(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(1, 1, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied when token is exhausted")
+	}
+
+	clock.Advance(denied.RetryAfter)
+
+	allowed, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error at retryAfter boundary: %v", err)
+	}
+	if !allowed.Allowed {
+		t.Fatal("expected request to be allowed exactly at retryAfter boundary")
+	}
+}
+
 func TestLeakyBucket_ResultFields(t *testing.T) {
 	ctx := context.Background()
 	limiter := NewLeakyBucket(3, 0.25)
@@ -90,6 +122,65 @@ func TestLeakyBucket_ResultFields(t *testing.T) {
 	}
 	if denied.RetryAfter != 4*time.Second {
 		t.Fatalf("expected retryAfter=4s on deny, got %v", denied.RetryAfter)
+	}
+}
+
+func TestLeakyBucket_RetryAfterTracksPartialLeak(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(1, 1, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	clock.Advance(900 * time.Millisecond)
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied before enough water leaks")
+	}
+	if denied.RetryAfter != 100*time.Millisecond {
+		t.Fatalf("expected retryAfter=100ms after partial leak, got %v", denied.RetryAfter)
+	}
+}
+
+func TestLeakyBucket_AllowsAtExactRetryAfterBoundary(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(1, 1, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied when bucket is full")
+	}
+
+	clock.Advance(denied.RetryAfter)
+
+	allowed, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error at retryAfter boundary: %v", err)
+	}
+	if !allowed.Allowed {
+		t.Fatal("expected request to be allowed exactly at retryAfter boundary")
 	}
 }
 
@@ -139,5 +230,37 @@ func TestSlidingWindow_ResultFields(t *testing.T) {
 	}
 	if allowedAfterWindow.RetryAfter != 0 {
 		t.Fatalf("expected retryAfter=0 after window slides, got %v", allowedAfterWindow.RetryAfter)
+	}
+}
+
+func TestSlidingWindow_AllowsAtExactRetryAfterBoundary(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(1, time.Second, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied while the window is full")
+	}
+
+	clock.Advance(denied.RetryAfter)
+
+	allowed, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error at retryAfter boundary: %v", err)
+	}
+	if !allowed.Allowed {
+		t.Fatal("expected request to be allowed exactly at retryAfter boundary")
 	}
 }

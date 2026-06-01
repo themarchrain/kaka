@@ -86,8 +86,9 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		}, nil
 	}
 	// 桶满了，溢出拒绝
-	// 计算需要等待的时间（漏掉1滴水需要的时间）
-	retryAfter := time.Duration(1.0 / lb.rate * float64(time.Second))
+	// 计算需要等待的时间（再漏掉多少水才能容纳当前请求）
+	overflow := b.water + 1 - lb.capacity
+	retryAfter := time.Duration(overflow / lb.rate * float64(time.Second))
 	return kaka.Result{
 		Allowed:    false,
 		Remaining:  0,
