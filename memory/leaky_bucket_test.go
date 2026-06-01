@@ -85,10 +85,19 @@ func TestLeakyBucket_Leak(t *testing.T) {
 func TestNewLeakyBucket_InvalidCapacity(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("expected panic on capacity <= 0")
+			t.Error("expected panic on capacity < 1")
 		}
 	}()
 	NewLeakyBucket(0, 1)
+}
+
+func TestNewLeakyBucket_CapacityLessThanOne(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic on capacity < 1")
+		}
+	}()
+	NewLeakyBucket(0.5, 1)
 }
 
 func TestNewLeakyBucket_InvalidRate(t *testing.T) {
