@@ -90,6 +90,30 @@ func TestTokenBucket_AllowsAtExactRetryAfterBoundary(t *testing.T) {
 	}
 }
 
+func TestTokenBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewTokenBucket(1, 2e9)
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied when token is exhausted")
+	}
+	if denied.RetryAfter != time.Nanosecond {
+		t.Fatalf("expected retryAfter to round up to 1ns, got %v", denied.RetryAfter)
+	}
+}
+
 func TestLeakyBucket_ResultFields(t *testing.T) {
 	ctx := context.Background()
 	limiter := NewLeakyBucket(3, 0.25)
@@ -181,6 +205,30 @@ func TestLeakyBucket_AllowsAtExactRetryAfterBoundary(t *testing.T) {
 	}
 	if !allowed.Allowed {
 		t.Fatal("expected request to be allowed exactly at retryAfter boundary")
+	}
+}
+
+func TestLeakyBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
+	ctx := context.Background()
+	limiter := NewLeakyBucket(1, 2e9)
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied when bucket is full")
+	}
+	if denied.RetryAfter != time.Nanosecond {
+		t.Fatalf("expected retryAfter to round up to 1ns, got %v", denied.RetryAfter)
 	}
 }
 

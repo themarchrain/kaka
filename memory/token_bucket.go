@@ -86,7 +86,7 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	}
 
 	// 被限流，计算需要等待的时间（恢复1个令牌需要的时间）
-	retryAfter := time.Duration((1.0 - b.tokens) / tb.rate * float64(time.Second))
+	retryAfter := durationFromSecondsCeil((1.0 - b.tokens) / tb.rate)
 	return kaka.Result{
 		Allowed:    false,
 		Remaining:  0,
