@@ -41,6 +41,40 @@ func TestMapStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) 
 	}
 }
 
+func TestMapStore_GetOrCreate_CleansExpiredKeysWhenExistingKeyIsAccessed(t *testing.T) {
+	store := newMapStore[*bucket](options{
+		keyTTL:          100 * time.Millisecond,
+		cleanupInterval: 10 * time.Millisecond,
+	})
+	start := time.Now()
+
+	active, err := store.getOrCreate("active", start, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating active key: %v", err)
+	}
+	_, err = store.getOrCreate("expired", start, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating expired key: %v", err)
+	}
+
+	got, err := store.getOrCreate("active", start.Add(150*time.Millisecond), func(now time.Time) *bucket {
+		return &bucket{tokens: 2, lastRefilled: now}
+	})
+	if err != nil {
+		t.Fatalf("unexpected error getting active key: %v", err)
+	}
+	if got != active {
+		t.Fatal("expected existing active key to be returned")
+	}
+	if store.len() != 1 {
+		t.Fatalf("expected expired key to be cleaned during existing-key access, got len=%d", store.len())
+	}
+}
+
 func TestMapStore_GetOrCreate_CleansExpiredKeysBeforeMaxKeysCheck(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		maxKeys:         1,

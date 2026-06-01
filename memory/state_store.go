@@ -32,6 +32,7 @@ func newMapStore[T any](opts options) *mapStore[T] {
 func (s *mapStore[T]) getOrCreate(key string, now time.Time, create func(time.Time) T) (T, error) {
 	if entry, ok := s.items[key]; ok {
 		entry.lastSeen = now
+		s.cleanup(now)
 		return entry.value, nil
 	}
 
