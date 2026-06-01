@@ -64,15 +64,16 @@ func TestTokenBucket_KeyIsolation(t *testing.T) {
 
 func TestTokenBucket_TokenRefill(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewTokenBucket(5, 10) // 容量5，每秒10个令牌
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(5, 10, withClock(clock)) // 容量5，每秒10个令牌
 
 	// 消耗所有令牌
 	for i := 0; i < 5; i++ {
 		limiter.Allow(ctx, "user:1")
 	}
 
-	// 等待令牌补充
-	time.Sleep(200 * time.Millisecond) // 应该补充约2个令牌
+	// 推进时间，应该补充约2个令牌
+	clock.Advance(200 * time.Millisecond)
 
 	// 应该可以放行
 	result, _ := limiter.Allow(ctx, "user:1")
@@ -225,19 +226,21 @@ func TestTokenBucket_MaxKeys(t *testing.T) {
 
 func TestTokenBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	// TTL=100ms, cleanupInterval=50ms
 	limiter := NewTokenBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(100*time.Millisecond),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	// 创建两个 key
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	// 等待 key 过期 + 超过 cleanupInterval
-	time.Sleep(160 * time.Millisecond)
+	// 推进到 key 过期 + 超过 cleanupInterval
+	clock.Advance(160 * time.Millisecond)
 
 	// 新 key 应该能进入，因为过期 key 已被清理
 	result, err := limiter.Allow(ctx, "user:3")
@@ -251,19 +254,21 @@ func TestTokenBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 
 func TestTokenBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	// TTL=10s, cleanupInterval=50ms
 	limiter := NewTokenBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(10*time.Second),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	// 创建两个 key
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	// 等待超过 cleanupInterval 但未超过 TTL
-	time.Sleep(100 * time.Millisecond)
+	// 推进超过 cleanupInterval 但未超过 TTL
+	clock.Advance(100 * time.Millisecond)
 
 	// 新 key 不应该能进入，因为 key 未过期
 	_, err := limiter.Allow(ctx, "user:3")
@@ -283,22 +288,24 @@ func TestTokenBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
 
 func TestTokenBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	// TTL=200ms, cleanupInterval=50ms
 	limiter := NewTokenBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(200*time.Millisecond),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	// 创建 key
 	limiter.Allow(ctx, "user:1")
 
 	// 100ms 后访问一次，刷新 lastSeen
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 	limiter.Allow(ctx, "user:1")
 
 	// 再等 150ms（距首次 250ms，但距最后访问只有 150ms < TTL=200ms）
-	time.Sleep(150 * time.Millisecond)
+	clock.Advance(150 * time.Millisecond)
 
 	// 创建新 key，触发清理
 	// user:1 不应该被清理，因为 lastSeen 被刷新了
@@ -316,19 +323,21 @@ func TestTokenBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
 
 func TestTokenBucket_Cleanup_IntervalNotReached(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	// TTL=50ms, cleanupInterval=10s（很长的间隔）
 	limiter := NewTokenBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(50*time.Millisecond),
 		WithCleanupInterval(10*time.Second),
+		withClock(clock),
 	)
 
 	// 创建两个 key
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	// 等待 key 过期
-	time.Sleep(100 * time.Millisecond)
+	// 推进到 key 过期
+	clock.Advance(100 * time.Millisecond)
 
 	// cleanupInterval 未到，不应该清理
 	_, err := limiter.Allow(ctx, "user:3")

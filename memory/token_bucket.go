@@ -55,7 +55,7 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
-	now := time.Now()
+	now := tb.opts.clock.Now()
 	b, err := tb.store.getOrCreate(key, now, func(now time.Time) *bucket {
 		return &bucket{
 			tokens:       tb.capacity, // 初始默认满桶

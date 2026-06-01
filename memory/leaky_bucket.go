@@ -54,7 +54,7 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
-	now := time.Now()
+	now := lb.opts.clock.Now()
 	b, err := lb.store.getOrCreate(key, now, func(now time.Time) *leakyState {
 		return &leakyState{
 			water:    0, // 初始空桶

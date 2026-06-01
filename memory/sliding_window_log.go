@@ -53,7 +53,7 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 
-	now := time.Now()
+	now := sw.opts.clock.Now()
 	state, err := sw.store.getOrCreate(key, now, func(now time.Time) *windowState {
 		return &windowState{
 			logs: make([]time.Time, 0),

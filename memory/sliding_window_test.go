@@ -64,15 +64,16 @@ func TestSlidingWindow_KeyIsolation(t *testing.T) {
 
 func TestSlidingWindow_WindowSlide(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewSlidingWindow(3, 500*time.Millisecond) // 500ms窗口内最多3个请求
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(3, 500*time.Millisecond, withClock(clock)) // 500ms窗口内最多3个请求
 
 	// 消耗所有名额
 	for i := 0; i < 3; i++ {
 		limiter.Allow(ctx, "user:1")
 	}
 
-	// 等待窗口滑动
-	time.Sleep(600 * time.Millisecond) // 窗口已过期
+	// 推进窗口滑动
+	clock.Advance(600 * time.Millisecond)
 
 	// 应该可以放行
 	result, _ := limiter.Allow(ctx, "user:1")
@@ -101,16 +102,18 @@ func TestNewSlidingWindow_InvalidWindow(t *testing.T) {
 
 func TestSlidingWindow_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewSlidingWindow(5, time.Second,
 		WithMaxKeys(2),
 		WithKeyTTL(100*time.Millisecond),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	time.Sleep(160 * time.Millisecond)
+	clock.Advance(160 * time.Millisecond)
 
 	result, err := limiter.Allow(ctx, "user:3")
 	if err != nil {
@@ -123,16 +126,18 @@ func TestSlidingWindow_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 
 func TestSlidingWindow_Cleanup_UnexpiredKeyKept(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewSlidingWindow(5, time.Second,
 		WithMaxKeys(2),
 		WithKeyTTL(10*time.Second),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 
 	_, err := limiter.Allow(ctx, "user:3")
 	if err != ErrMaxKeysExceeded {
@@ -142,18 +147,20 @@ func TestSlidingWindow_Cleanup_UnexpiredKeyKept(t *testing.T) {
 
 func TestSlidingWindow_Cleanup_LastSeenRefreshed(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewSlidingWindow(5, time.Second,
 		WithMaxKeys(2),
 		WithKeyTTL(200*time.Millisecond),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 	limiter.Allow(ctx, "user:1")
 
-	time.Sleep(150 * time.Millisecond)
+	clock.Advance(150 * time.Millisecond)
 
 	limiter.Allow(ctx, "user:2")
 
@@ -168,16 +175,18 @@ func TestSlidingWindow_Cleanup_LastSeenRefreshed(t *testing.T) {
 
 func TestSlidingWindow_Cleanup_IntervalNotReached(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewSlidingWindow(5, time.Second,
 		WithMaxKeys(2),
 		WithKeyTTL(50*time.Millisecond),
 		WithCleanupInterval(10*time.Second),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 
 	_, err := limiter.Allow(ctx, "user:3")
 	if err != ErrMaxKeysExceeded {

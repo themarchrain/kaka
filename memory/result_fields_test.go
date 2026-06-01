@@ -8,7 +8,8 @@ import (
 
 func TestTokenBucket_ResultFields(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewTokenBucket(3, 0.25)
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(3, 0.25, withClock(clock))
 
 	for i, wantRemaining := range []int64{2, 1, 0} {
 		result, err := limiter.Allow(ctx, "user:1")
@@ -40,7 +41,7 @@ func TestTokenBucket_ResultFields(t *testing.T) {
 		t.Fatalf("expected retryAfter within (0, 4s], got %v", denied.RetryAfter)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	clock.Advance(50 * time.Millisecond)
 
 	deniedAfterPartialRefill, err := limiter.Allow(ctx, "user:1")
 	if err != nil {
@@ -94,7 +95,8 @@ func TestLeakyBucket_ResultFields(t *testing.T) {
 
 func TestSlidingWindow_ResultFields(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewSlidingWindow(3, 150*time.Millisecond)
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(3, 150*time.Millisecond, withClock(clock))
 
 	for i, wantRemaining := range []int64{2, 1, 0} {
 		result, err := limiter.Allow(ctx, "user:1")
@@ -126,7 +128,7 @@ func TestSlidingWindow_ResultFields(t *testing.T) {
 		t.Fatalf("expected retryAfter within (0, 150ms], got %v", denied.RetryAfter)
 	}
 
-	time.Sleep(denied.RetryAfter + 20*time.Millisecond)
+	clock.Advance(denied.RetryAfter + 20*time.Millisecond)
 
 	allowedAfterWindow, err := limiter.Allow(ctx, "user:1")
 	if err != nil {

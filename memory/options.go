@@ -18,10 +18,13 @@ type options struct {
 	maxKeys         int
 	keyTTL          time.Duration
 	cleanupInterval time.Duration
+	clock           clock
 }
 
 func defaultOptions() options {
-	return options{}
+	return options{
+		clock: realClock{},
+	}
 }
 
 func (o *options) applyDefaults() {
@@ -39,6 +42,9 @@ func (o *options) validate() {
 	}
 	if o.cleanupInterval < 0 {
 		panic("memory: cleanupInterval must be >= 0")
+	}
+	if o.clock == nil {
+		panic("memory: clock must not be nil")
 	}
 }
 

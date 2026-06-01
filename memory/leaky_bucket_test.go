@@ -64,15 +64,16 @@ func TestLeakyBucket_KeyIsolation(t *testing.T) {
 
 func TestLeakyBucket_Leak(t *testing.T) {
 	ctx := context.Background()
-	limiter := NewLeakyBucket(5, 10) // 容量5，每秒漏10滴
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(5, 10, withClock(clock)) // 容量5，每秒漏10滴
 
 	// 消耗所有容量
 	for i := 0; i < 5; i++ {
 		limiter.Allow(ctx, "user:1")
 	}
 
-	// 等待漏水
-	time.Sleep(200 * time.Millisecond) // 应该漏掉约2滴水
+	// 推进时间，应该漏掉约2滴水
+	clock.Advance(200 * time.Millisecond)
 
 	// 应该可以放行
 	result, _ := limiter.Allow(ctx, "user:1")
@@ -101,16 +102,18 @@ func TestNewLeakyBucket_InvalidRate(t *testing.T) {
 
 func TestLeakyBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewLeakyBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(100*time.Millisecond),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	time.Sleep(160 * time.Millisecond)
+	clock.Advance(160 * time.Millisecond)
 
 	result, err := limiter.Allow(ctx, "user:3")
 	if err != nil {
@@ -123,16 +126,18 @@ func TestLeakyBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 
 func TestLeakyBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewLeakyBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(10*time.Second),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 
 	_, err := limiter.Allow(ctx, "user:3")
 	if err != ErrMaxKeysExceeded {
@@ -142,18 +147,20 @@ func TestLeakyBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
 
 func TestLeakyBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewLeakyBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(200*time.Millisecond),
 		WithCleanupInterval(50*time.Millisecond),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 	limiter.Allow(ctx, "user:1")
 
-	time.Sleep(150 * time.Millisecond)
+	clock.Advance(150 * time.Millisecond)
 
 	limiter.Allow(ctx, "user:2")
 
@@ -168,16 +175,18 @@ func TestLeakyBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
 
 func TestLeakyBucket_Cleanup_IntervalNotReached(t *testing.T) {
 	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
 	limiter := NewLeakyBucket(10, 1,
 		WithMaxKeys(2),
 		WithKeyTTL(50*time.Millisecond),
 		WithCleanupInterval(10*time.Second),
+		withClock(clock),
 	)
 
 	limiter.Allow(ctx, "user:1")
 	limiter.Allow(ctx, "user:2")
 
-	time.Sleep(100 * time.Millisecond)
+	clock.Advance(100 * time.Millisecond)
 
 	_, err := limiter.Allow(ctx, "user:3")
 	if err != ErrMaxKeysExceeded {
