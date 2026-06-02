@@ -2,6 +2,7 @@ package memory
 
 import (
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -101,6 +102,29 @@ func TestMapStore_GetOrCreate_CleansExpiredKeysBeforeMaxKeysCheck(t *testing.T) 
 	}
 	if store.len() != 1 {
 		t.Fatalf("expected store to contain 1 key after cleanup, got %d", store.len())
+	}
+}
+
+func TestMapStore_CleanupDeletesAtMostBatchSize(t *testing.T) {
+	store := newMapStore[*bucket](options{
+		keyTTL:          time.Millisecond,
+		cleanupInterval: time.Millisecond,
+	})
+	start := time.Now()
+	total := cleanupBatchSize + 10
+
+	for i := 0; i < total; i++ {
+		key := "user:" + strconv.Itoa(i)
+		store.items[key] = &keyEntry[*bucket]{
+			value:    &bucket{tokens: 1, lastRefilled: start},
+			lastSeen: start,
+		}
+	}
+
+	store.cleanup(start.Add(2 * time.Millisecond))
+
+	if got, want := store.len(), total-cleanupBatchSize; got != want {
+		t.Fatalf("expected cleanup to delete at most %d keys, got len=%d want %d", cleanupBatchSize, got, want)
 	}
 }
 
