@@ -118,6 +118,25 @@ func TestSlidingWindow_LogCapacityDoesNotExceedLimit(t *testing.T) {
 	}
 }
 
+func TestSlidingWindow_LogCapacityGrowsLazily(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(1024, time.Second, withClock(clock))
+
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first request: %v", err)
+	}
+	if !result.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	state := slidingWindowStateForTest(t, limiter, "user:1")
+	if got := cap(state.logs); got >= limiter.limit {
+		t.Fatalf("expected log capacity to grow lazily, got cap=%d limit=%d", got, limiter.limit)
+	}
+}
+
 func slidingWindowStateForTest(t *testing.T, limiter *SlidingWindow, key string) *windowState {
 	t.Helper()
 

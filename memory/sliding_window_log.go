@@ -56,7 +56,7 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	now := sw.opts.clock.Now()
 	state, err := sw.store.getOrCreate(key, now, func(now time.Time) *windowState {
 		return &windowState{
-			logs: make([]time.Time, 0, sw.limit),
+			logs: make([]time.Time, 0),
 		}
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	// 判断当前有效窗口内的请求数是否达到上限
 	if len(state.logs) < sw.limit {
 		// 未超限，追加当前请求时间，放行
-		state.logs = append(state.logs, now)
+		state.logs = appendWindowLog(state.logs, now, sw.limit)
 		return kaka.Result{
 			Allowed:   true,
 			Remaining: int64(sw.limit - len(state.logs)),
@@ -101,4 +101,25 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 		Remaining:  0,
 		RetryAfter: retryAfter,
 	}, nil
+}
+
+func appendWindowLog(logs []time.Time, now time.Time, limit int) []time.Time {
+	if len(logs) < cap(logs) {
+		return append(logs, now)
+	}
+
+	newCap := cap(logs) * 2
+	if newCap < 1 {
+		newCap = 1
+	}
+	if newCap > limit {
+		newCap = limit
+	}
+	if newCap < len(logs)+1 {
+		newCap = len(logs) + 1
+	}
+
+	next := make([]time.Time, len(logs), newCap)
+	copy(next, logs)
+	return append(next, now)
 }
