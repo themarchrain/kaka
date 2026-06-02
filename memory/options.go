@@ -62,8 +62,7 @@ func WithKeyTTL(d time.Duration) Option {
 }
 
 // WithCleanupInterval 设置惰性清理扫描间隔
-// 0 表示不自动清理（默认）
-// 设置了 keyTTL 但未设置 cleanupInterval 时，默认 1 分钟
+// 0 表示使用默认行为：未设置 keyTTL 时不清理；设置 keyTTL 时默认 1 分钟
 func WithCleanupInterval(d time.Duration) Option {
 	return func(o *options) { o.cleanupInterval = d }
 }
