@@ -147,6 +147,21 @@ func TestMapStore_CleanupRunsAtExactIntervalBoundary(t *testing.T) {
 	}
 }
 
+func TestMapStore_CleanupDoesNotRefreshLastCleanupBeforeInterval(t *testing.T) {
+	store := newMapStore[*bucket](options{
+		keyTTL:          time.Millisecond,
+		cleanupInterval: 10 * time.Millisecond,
+	})
+	start := time.Now()
+	store.lastCleanup = start
+
+	store.cleanup(start.Add(9 * time.Millisecond))
+
+	if !store.lastCleanup.Equal(start) {
+		t.Fatalf("expected lastCleanup to remain %v before interval, got %v", start, store.lastCleanup)
+	}
+}
+
 func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
 	store := newMapStore[*bucket](options{maxKeys: 1})
 	now := time.Now()
