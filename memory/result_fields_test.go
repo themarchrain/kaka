@@ -115,6 +115,35 @@ func TestTokenBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
 	}
 }
 
+func TestTokenBucket_RemainingFloorsFractionalTokens(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(2, 2, withClock(clock))
+
+	for i := 0; i < 2; i++ {
+		result, err := limiter.Allow(ctx, "user:1")
+		if err != nil {
+			t.Fatalf("unexpected error on initial request %d: %v", i+1, err)
+		}
+		if !result.Allowed {
+			t.Fatalf("expected initial request %d to be allowed", i+1)
+		}
+	}
+
+	clock.Advance(750 * time.Millisecond)
+
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error after fractional refill: %v", err)
+	}
+	if !result.Allowed {
+		t.Fatal("expected request to be allowed after fractional refill reaches one token")
+	}
+	if result.Remaining != 0 {
+		t.Fatalf("expected fractional remaining tokens to floor to 0, got %d", result.Remaining)
+	}
+}
+
 func TestLeakyBucket_ResultFields(t *testing.T) {
 	ctx := context.Background()
 	clock := newFakeClock(time.Unix(100, 0))
@@ -148,6 +177,35 @@ func TestLeakyBucket_ResultFields(t *testing.T) {
 	}
 	if denied.RetryAfter != 4*time.Second {
 		t.Fatalf("expected retryAfter=4s on deny, got %v", denied.RetryAfter)
+	}
+}
+
+func TestLeakyBucket_RemainingFloorsFractionalCapacity(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(2, 2, withClock(clock))
+
+	for i := 0; i < 2; i++ {
+		result, err := limiter.Allow(ctx, "user:1")
+		if err != nil {
+			t.Fatalf("unexpected error on initial request %d: %v", i+1, err)
+		}
+		if !result.Allowed {
+			t.Fatalf("expected initial request %d to be allowed", i+1)
+		}
+	}
+
+	clock.Advance(750 * time.Millisecond)
+
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error after fractional leak: %v", err)
+	}
+	if !result.Allowed {
+		t.Fatal("expected request to be allowed after enough water leaks")
+	}
+	if result.Remaining != 0 {
+		t.Fatalf("expected fractional remaining capacity to floor to 0, got %d", result.Remaining)
 	}
 }
 
