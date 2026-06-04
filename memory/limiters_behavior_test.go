@@ -424,3 +424,54 @@ func TestLimiters_RejectBlankKey(t *testing.T) {
 		})
 	}
 }
+
+func TestLimiters_InvalidKeyDoesNotConsumeMaxKeysCapacity(t *testing.T) {
+	cases := []struct {
+		name       string
+		newLimiter func() kaka.Limiter
+	}{
+		{
+			name: "token bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewTokenBucket(1, 1, WithMaxKeys(1))
+			},
+		},
+		{
+			name: "leaky bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewLeakyBucket(1, 1, WithMaxKeys(1))
+			},
+		},
+		{
+			name: "sliding window",
+			newLimiter: func() kaka.Limiter {
+				return NewSlidingWindow(1, time.Second, WithMaxKeys(1))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := tc.newLimiter()
+			ctx := context.Background()
+
+			_, err := limiter.Allow(ctx, " ")
+			if !errors.Is(err, ErrInvalidKey) {
+				t.Fatalf("expected ErrInvalidKey for blank key, got %v", err)
+			}
+
+			result, err := limiter.Allow(ctx, "user:1")
+			if err != nil {
+				t.Fatalf("expected valid key to use available capacity after invalid key, got %v", err)
+			}
+			if !result.Allowed {
+				t.Fatal("expected first valid key to be allowed")
+			}
+
+			_, err = limiter.Allow(ctx, "user:2")
+			if !errors.Is(err, ErrMaxKeysExceeded) {
+				t.Fatalf("expected capacity to be consumed only by valid key, got %v", err)
+			}
+		})
+	}
+}
