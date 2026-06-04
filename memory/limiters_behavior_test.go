@@ -330,6 +330,60 @@ func TestLimiters_MaxKeysZeroAllowsManyKeys(t *testing.T) {
 	}
 }
 
+func TestLimiters_MaxKeysStillAllowsExistingKey(t *testing.T) {
+	cases := []struct {
+		name       string
+		newLimiter func() kaka.Limiter
+	}{
+		{
+			name: "token bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewTokenBucket(100, 100, WithMaxKeys(1))
+			},
+		},
+		{
+			name: "leaky bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewLeakyBucket(100, 100, WithMaxKeys(1))
+			},
+		},
+		{
+			name: "sliding window",
+			newLimiter: func() kaka.Limiter {
+				return NewSlidingWindow(100, time.Second, WithMaxKeys(1))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := tc.newLimiter()
+			ctx := context.Background()
+
+			first, err := limiter.Allow(ctx, "user:1")
+			if err != nil {
+				t.Fatalf("unexpected error creating first key: %v", err)
+			}
+			if !first.Allowed {
+				t.Fatal("expected first key to be allowed")
+			}
+
+			_, err = limiter.Allow(ctx, "user:2")
+			if !errors.Is(err, ErrMaxKeysExceeded) {
+				t.Fatalf("expected ErrMaxKeysExceeded for new key, got %v", err)
+			}
+
+			existing, err := limiter.Allow(ctx, "user:1")
+			if err != nil {
+				t.Fatalf("expected existing key to bypass maxKeys check, got %v", err)
+			}
+			if !existing.Allowed {
+				t.Fatal("expected existing key to still be allowed")
+			}
+		})
+	}
+}
+
 func TestLimiters_RejectBlankKey(t *testing.T) {
 	cases := []struct {
 		name       string
