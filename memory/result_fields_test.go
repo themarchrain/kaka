@@ -454,6 +454,43 @@ func TestSlidingWindow_RetryAfterTracksOldestRequestExpiry(t *testing.T) {
 	}
 }
 
+func TestSlidingWindow_DropsRequestsAtWindowStart(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(2, 100*time.Millisecond, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	clock.Advance(50 * time.Millisecond)
+
+	second, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on second allow: %v", err)
+	}
+	if !second.Allowed {
+		t.Fatal("expected second request to be allowed")
+	}
+
+	clock.Advance(50 * time.Millisecond)
+
+	third, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error when oldest request reaches window start: %v", err)
+	}
+	if !third.Allowed {
+		t.Fatal("expected request at exact window-start boundary to be allowed")
+	}
+	if third.Remaining != 0 {
+		t.Fatalf("expected only one slot to be freed at boundary, got remaining=%d", third.Remaining)
+	}
+}
+
 func TestSlidingWindow_AllowsAtExactRetryAfterBoundary(t *testing.T) {
 	ctx := context.Background()
 	clock := newFakeClock(time.Unix(100, 0))
