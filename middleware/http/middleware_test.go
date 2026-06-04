@@ -188,6 +188,31 @@ func TestMiddlewareFailsOpenOnLimiterError(t *testing.T) {
 	}
 }
 
+func TestMiddlewareFailsOpenOnBlankKeyError(t *testing.T) {
+	limiter := &stubLimiter{
+		err: errors.New("invalid key"),
+	}
+	handler := httpmiddleware.Middleware(httpmiddleware.Config{
+		Limiter: limiter,
+		KeyFunc: func(r *http.Request) string {
+			return "   "
+		},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(recorder, request)
+
+	if limiter.key != "   " {
+		t.Fatalf("expected blank key to be passed to limiter, got %q", limiter.key)
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected blank key limiter error to fail open with status %d, got %d", http.StatusNoContent, recorder.Code)
+	}
+}
+
 func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 	expectedErr := errors.New("limiter unavailable")
 	limiter := &stubLimiter{
