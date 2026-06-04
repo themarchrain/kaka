@@ -117,6 +117,7 @@ func TestNewTokenBucket_NonFiniteCapacity(t *testing.T) {
 	}{
 		{name: "NaN", capacity: math.NaN()},
 		{name: "+Inf", capacity: math.Inf(1)},
+		{name: "-Inf", capacity: math.Inf(-1)},
 	}
 
 	for _, tc := range cases {
@@ -138,6 +139,7 @@ func TestNewTokenBucket_NonFiniteRate(t *testing.T) {
 	}{
 		{name: "NaN", rate: math.NaN()},
 		{name: "+Inf", rate: math.Inf(1)},
+		{name: "-Inf", rate: math.Inf(-1)},
 	}
 
 	for _, tc := range cases {
