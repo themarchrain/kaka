@@ -194,6 +194,7 @@ func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 		err: expectedErr,
 	}
 	var handledErr error
+	nextCalled := false
 	handler := httpmiddleware.Middleware(httpmiddleware.Config{
 		Limiter: limiter,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -201,6 +202,7 @@ func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		},
 	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -210,6 +212,9 @@ func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 
 	if !errors.Is(handledErr, expectedErr) {
 		t.Fatalf("expected handler error %v, got %v", expectedErr, handledErr)
+	}
+	if nextCalled {
+		t.Fatal("expected custom error handler to stop next handler")
 	}
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, recorder.Code)

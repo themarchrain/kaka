@@ -174,6 +174,7 @@ func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 		err: expectedErr,
 	}
 	var handledErr error
+	nextCalled := false
 	router := gonic.New()
 	router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
 		Limiter: limiter,
@@ -183,6 +184,7 @@ func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 		},
 	}))
 	router.GET("/", func(c *gonic.Context) {
+		nextCalled = true
 		c.Status(http.StatusNoContent)
 	})
 
@@ -192,6 +194,9 @@ func TestMiddlewareUsesCustomErrorHandler(t *testing.T) {
 
 	if !errors.Is(handledErr, expectedErr) {
 		t.Fatalf("expected handler error %v, got %v", expectedErr, handledErr)
+	}
+	if nextCalled {
+		t.Fatal("expected custom error handler to stop next handler")
 	}
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, recorder.Code)
