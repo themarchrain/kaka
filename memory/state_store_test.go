@@ -42,6 +42,34 @@ func TestMapStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) 
 	}
 }
 
+func TestMapStore_GetOrCreate_DoesNotCallCreateForExistingKey(t *testing.T) {
+	store := newMapStore[*bucket](defaultOptions())
+	now := time.Now()
+	created := 0
+
+	first, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+		created++
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating key: %v", err)
+	}
+
+	second, err := store.getOrCreate("user:1", now.Add(time.Second), func(now time.Time) *bucket {
+		created++
+		return &bucket{tokens: 2, lastRefilled: now}
+	})
+	if err != nil {
+		t.Fatalf("unexpected error getting existing key: %v", err)
+	}
+	if second != first {
+		t.Fatal("expected existing key to return original state")
+	}
+	if created != 1 {
+		t.Fatalf("expected create callback to run once, got %d", created)
+	}
+}
+
 func TestMapStore_GetOrCreate_CleansExpiredKeysWhenExistingKeyIsAccessed(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		keyTTL:          100 * time.Millisecond,
