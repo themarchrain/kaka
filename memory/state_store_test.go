@@ -162,6 +162,29 @@ func TestMapStore_CleanupDoesNotRefreshLastCleanupBeforeInterval(t *testing.T) {
 	}
 }
 
+func TestMapStore_CleanupRefreshesLastCleanupWhenIntervalElapses(t *testing.T) {
+	store := newMapStore[*bucket](options{
+		keyTTL:          100 * time.Millisecond,
+		cleanupInterval: 10 * time.Millisecond,
+	})
+	start := time.Now()
+	now := start.Add(10 * time.Millisecond)
+	store.lastCleanup = start
+	store.items["user:1"] = &keyEntry[*bucket]{
+		value:    &bucket{tokens: 1, lastRefilled: start},
+		lastSeen: start,
+	}
+
+	store.cleanup(now)
+
+	if !store.lastCleanup.Equal(now) {
+		t.Fatalf("expected lastCleanup to refresh to %v, got %v", now, store.lastCleanup)
+	}
+	if store.len() != 1 {
+		t.Fatalf("expected unexpired key to remain, got len=%d", store.len())
+	}
+}
+
 func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
 	store := newMapStore[*bucket](options{maxKeys: 1})
 	now := time.Now()
