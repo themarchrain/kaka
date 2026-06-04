@@ -162,6 +162,49 @@ func TestMapStore_CleanupDoesNotRefreshLastCleanupBeforeInterval(t *testing.T) {
 	}
 }
 
+func TestMapStore_CleanupDoesNotRefreshLastCleanupWhenDisabled(t *testing.T) {
+	cases := []struct {
+		name string
+		opts options
+	}{
+		{
+			name: "key ttl disabled",
+			opts: options{
+				keyTTL:          0,
+				cleanupInterval: 10 * time.Millisecond,
+			},
+		},
+		{
+			name: "cleanup interval disabled",
+			opts: options{
+				keyTTL:          time.Millisecond,
+				cleanupInterval: 0,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newMapStore[*bucket](tc.opts)
+			start := time.Now()
+			store.lastCleanup = start
+			store.items["user:1"] = &keyEntry[*bucket]{
+				value:    &bucket{tokens: 1, lastRefilled: start},
+				lastSeen: start,
+			}
+
+			store.cleanup(start.Add(time.Hour))
+
+			if !store.lastCleanup.Equal(start) {
+				t.Fatalf("expected lastCleanup to remain %v when cleanup is disabled, got %v", start, store.lastCleanup)
+			}
+			if store.len() != 1 {
+				t.Fatalf("expected disabled cleanup to keep key, got len=%d", store.len())
+			}
+		})
+	}
+}
+
 func TestMapStore_CleanupRefreshesLastCleanupWhenIntervalElapses(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		keyTTL:          100 * time.Millisecond,
