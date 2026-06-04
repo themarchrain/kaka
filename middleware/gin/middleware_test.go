@@ -53,6 +53,32 @@ func TestMiddlewareWritesHeadersByDefault(t *testing.T) {
 	}
 }
 
+func TestMiddlewareUsesClientIPByDefault(t *testing.T) {
+	gonic.SetMode(gonic.TestMode)
+
+	limiter := &stubLimiter{
+		result: kaka.Result{
+			Allowed: true,
+		},
+	}
+	router := gonic.New()
+	router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
+		Limiter: limiter,
+	}))
+	router.GET("/", func(c *gonic.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.RemoteAddr = "192.0.2.1:12345"
+	router.ServeHTTP(recorder, request)
+
+	if limiter.key != "192.0.2.1" {
+		t.Fatalf("expected default key from ClientIP, got %q", limiter.key)
+	}
+}
+
 func TestMiddlewareCanDisableHeaders(t *testing.T) {
 	gonic.SetMode(gonic.TestMode)
 
@@ -110,6 +136,44 @@ func TestMiddlewareWritesRetryAfterWhenDenied(t *testing.T) {
 	}
 	if got := recorder.Header().Get("Retry-After"); got != "1" {
 		t.Fatalf("expected retry-after header 1, got %q", got)
+	}
+}
+
+func TestMiddlewareUsesCustomDeniedHandler(t *testing.T) {
+	gonic.SetMode(gonic.TestMode)
+
+	limiter := &stubLimiter{
+		result: kaka.Result{
+			Allowed: false,
+		},
+	}
+	deniedCalled := false
+	nextCalled := false
+	router := gonic.New()
+	router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
+		Limiter: limiter,
+		DeniedHandler: func(c *gonic.Context) {
+			deniedCalled = true
+			c.AbortWithStatus(http.StatusAccepted)
+		},
+	}))
+	router.GET("/", func(c *gonic.Context) {
+		nextCalled = true
+		c.Status(http.StatusNoContent)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	router.ServeHTTP(recorder, request)
+
+	if !deniedCalled {
+		t.Fatal("expected custom denied handler to be called")
+	}
+	if nextCalled {
+		t.Fatal("expected custom denied handler to stop next handler")
+	}
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d", http.StatusAccepted, recorder.Code)
 	}
 }
 
