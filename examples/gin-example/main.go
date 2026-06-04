@@ -21,7 +21,6 @@ func main() {
 		KeyFunc: func(c *gin.Context) string {
 			return c.ClientIP() // 按 IP 限流
 		},
-		Headers: true,
 	}))
 
 	// 测试路由
