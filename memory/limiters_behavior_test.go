@@ -287,6 +287,49 @@ func TestLimiters_ConcurrentAllow_RespectsMaxKeys(t *testing.T) {
 	}
 }
 
+func TestLimiters_MaxKeysZeroAllowsManyKeys(t *testing.T) {
+	cases := []struct {
+		name       string
+		newLimiter func() kaka.Limiter
+	}{
+		{
+			name: "token bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewTokenBucket(100, 100, WithMaxKeys(0))
+			},
+		},
+		{
+			name: "leaky bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewLeakyBucket(100, 100, WithMaxKeys(0))
+			},
+		},
+		{
+			name: "sliding window",
+			newLimiter: func() kaka.Limiter {
+				return NewSlidingWindow(100, time.Second, WithMaxKeys(0))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := tc.newLimiter()
+			ctx := context.Background()
+
+			for i := 0; i < 128; i++ {
+				result, err := limiter.Allow(ctx, "user:"+strconv.Itoa(i))
+				if err != nil {
+					t.Fatalf("unexpected error with maxKeys=0 on key %d: %v", i, err)
+				}
+				if !result.Allowed {
+					t.Fatalf("expected first request for key %d to be allowed", i)
+				}
+			}
+		})
+	}
+}
+
 func TestLimiters_RejectBlankKey(t *testing.T) {
 	cases := []struct {
 		name       string
