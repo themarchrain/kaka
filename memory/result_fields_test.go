@@ -284,6 +284,41 @@ func TestSlidingWindow_ResultFields(t *testing.T) {
 	}
 }
 
+func TestSlidingWindow_RetryAfterTracksOldestRequestExpiry(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewSlidingWindow(2, 100*time.Millisecond, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	clock.Advance(40 * time.Millisecond)
+
+	second, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on second allow: %v", err)
+	}
+	if !second.Allowed {
+		t.Fatal("expected second request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied while the window is full")
+	}
+	if denied.RetryAfter != 60*time.Millisecond {
+		t.Fatalf("expected retryAfter to wait for oldest request expiry, got %v", denied.RetryAfter)
+	}
+}
+
 func TestSlidingWindow_AllowsAtExactRetryAfterBoundary(t *testing.T) {
 	ctx := context.Background()
 	clock := newFakeClock(time.Unix(100, 0))
