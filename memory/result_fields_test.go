@@ -115,6 +115,31 @@ func TestTokenBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
 	}
 }
 
+func TestTokenBucket_RetryAfterClampsHugeWait(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(1, 1e-300, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied when token is exhausted")
+	}
+	if denied.RetryAfter != maxDuration {
+		t.Fatalf("expected retryAfter to clamp to max duration, got %v", denied.RetryAfter)
+	}
+}
+
 func TestTokenBucket_RemainingFloorsFractionalTokens(t *testing.T) {
 	ctx := context.Background()
 	clock := newFakeClock(time.Unix(100, 0))
@@ -290,6 +315,31 @@ func TestLeakyBucket_RetryAfterRoundsUpSubNanosecondWait(t *testing.T) {
 	}
 	if denied.RetryAfter != time.Nanosecond {
 		t.Fatalf("expected retryAfter to round up to 1ns, got %v", denied.RetryAfter)
+	}
+}
+
+func TestLeakyBucket_RetryAfterClampsHugeWait(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewLeakyBucket(1, 1e-300, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied when bucket is full")
+	}
+	if denied.RetryAfter != maxDuration {
+		t.Fatalf("expected retryAfter to clamp to max duration, got %v", denied.RetryAfter)
 	}
 }
 
