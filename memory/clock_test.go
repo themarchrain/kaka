@@ -117,3 +117,40 @@ func TestSlidingWindow_UsesInjectedClock(t *testing.T) {
 		t.Fatal("expected request to be allowed after clock advance")
 	}
 }
+
+func TestLimiters_RejectNilInjectedClock(t *testing.T) {
+	cases := []struct {
+		name string
+		run  func()
+	}{
+		{
+			name: "token bucket",
+			run: func() {
+				NewTokenBucket(1, 1, withClock(nil))
+			},
+		},
+		{
+			name: "leaky bucket",
+			run: func() {
+				NewLeakyBucket(1, 1, withClock(nil))
+			},
+		},
+		{
+			name: "sliding window",
+			run: func() {
+				NewSlidingWindow(1, time.Second, withClock(nil))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Fatal("expected panic on nil injected clock")
+				}
+			}()
+			tc.run()
+		})
+	}
+}
