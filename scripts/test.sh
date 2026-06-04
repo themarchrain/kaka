@@ -2,7 +2,10 @@
 set -eu
 
 race=0
-if [ "${1:-}" = "--race" ]; then
+if [ "$#" -gt 1 ]; then
+    echo "usage: ./scripts/test.sh [--race]" >&2
+    exit 2
+elif [ "${1:-}" = "--race" ]; then
     race=1
 elif [ "${1:-}" != "" ]; then
     echo "usage: ./scripts/test.sh [--race]" >&2
