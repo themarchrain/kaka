@@ -84,10 +84,18 @@ Run the local CI-style matrix:
 .\scripts\test.ps1
 ```
 
+```sh
+sh ./scripts/test.sh
+```
+
 Run the matrix plus root-module race tests when the local Go toolchain supports it:
 
 ```powershell
 .\scripts\test.ps1 -Race
+```
+
+```sh
+sh ./scripts/test.sh --race
 ```
 
 On some Windows environments, race tests may fail because of cgo or race runtime toolchain limitations. The GitHub Actions workflow runs race tests on Linux with cgo enabled.

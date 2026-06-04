@@ -36,11 +36,13 @@ foreach ($module in $modules) {
 
 if ($Race) {
     Push-Location $root
+    $previousCGOEnabled = $env:CGO_ENABLED
     try {
         Write-Host "==> go test -race -count=1 ./... (.)"
         $env:CGO_ENABLED = "1"
         Invoke-GoTest @("test", "-race", "-count=1", "./...")
     } finally {
+        $env:CGO_ENABLED = $previousCGOEnabled
         Pop-Location
     }
 }
