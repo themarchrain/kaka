@@ -140,6 +140,33 @@ func TestTokenBucket_RetryAfterClampsHugeWait(t *testing.T) {
 	}
 }
 
+func TestTokenBucket_RetryAfterTracksPartialRefill(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock(time.Unix(100, 0))
+	limiter := NewTokenBucket(1, 10, withClock(clock))
+
+	first, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on first allow: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	clock.Advance(90 * time.Millisecond)
+
+	denied, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("expected request to be denied before enough tokens refill")
+	}
+	if denied.RetryAfter != 10*time.Millisecond {
+		t.Fatalf("expected retryAfter=10ms after partial refill, got %v", denied.RetryAfter)
+	}
+}
+
 func TestTokenBucket_RemainingFloorsFractionalTokens(t *testing.T) {
 	ctx := context.Background()
 	clock := newFakeClock(time.Unix(100, 0))
