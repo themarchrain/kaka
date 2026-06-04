@@ -274,3 +274,31 @@ func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
 		t.Fatalf("expected ErrMaxKeysExceeded, got %v", err)
 	}
 }
+
+func TestMapStore_GetOrCreate_DoesNotCallCreateWhenMaxKeysReached(t *testing.T) {
+	store := newMapStore[*bucket](options{maxKeys: 1})
+	now := time.Now()
+	created := 0
+
+	_, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+		created++
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating first key: %v", err)
+	}
+
+	_, err = store.getOrCreate("user:2", now, func(now time.Time) *bucket {
+		created++
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+	if !errors.Is(err, ErrMaxKeysExceeded) {
+		t.Fatalf("expected ErrMaxKeysExceeded, got %v", err)
+	}
+	if created != 1 {
+		t.Fatalf("expected rejected key not to call create callback, got %d calls", created)
+	}
+	if store.len() != 1 {
+		t.Fatalf("expected rejected key not to change store length, got len=%d", store.len())
+	}
+}
