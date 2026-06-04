@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -199,6 +200,88 @@ func TestLimiters_ConcurrentAllow_MultipleKeys(t *testing.T) {
 				if out.result.RetryAfter < 0 {
 					t.Fatalf("expected non-negative retryAfter, got %v", out.result.RetryAfter)
 				}
+			}
+		})
+	}
+}
+
+func TestLimiters_ConcurrentAllow_RespectsMaxKeys(t *testing.T) {
+	cases := []struct {
+		name       string
+		newLimiter func() kaka.Limiter
+	}{
+		{
+			name: "token bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewTokenBucket(100, 100, WithMaxKeys(4))
+			},
+		},
+		{
+			name: "leaky bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewLeakyBucket(100, 100, WithMaxKeys(4))
+			},
+		},
+		{
+			name: "sliding window",
+			newLimiter: func() kaka.Limiter {
+				return NewSlidingWindow(100, time.Second, WithMaxKeys(4))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := tc.newLimiter()
+			ctx := context.Background()
+
+			const workers = 32
+			type outcome struct {
+				result kaka.Result
+				err    error
+			}
+			results := make(chan outcome, workers)
+			var wg sync.WaitGroup
+
+			for i := 0; i < workers; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					result, err := limiter.Allow(ctx, "user:"+strconv.Itoa(i))
+					results <- outcome{result: result, err: err}
+				}(i)
+			}
+
+			wg.Wait()
+			close(results)
+
+			allowed := 0
+			rejectedNewKeys := 0
+			for out := range results {
+				if out.err != nil {
+					if !errors.Is(out.err, ErrMaxKeysExceeded) {
+						t.Fatalf("expected only ErrMaxKeysExceeded under maxKeys pressure, got %v", out.err)
+					}
+					rejectedNewKeys++
+					continue
+				}
+				if !out.result.Allowed {
+					t.Fatal("expected created keys to be allowed on their first request")
+				}
+				if out.result.Remaining < 0 {
+					t.Fatalf("expected non-negative remaining, got %d", out.result.Remaining)
+				}
+				if out.result.RetryAfter != 0 {
+					t.Fatalf("expected retryAfter=0 on first allow, got %v", out.result.RetryAfter)
+				}
+				allowed++
+			}
+
+			if allowed != 4 {
+				t.Fatalf("expected exactly maxKeys allowed creations, got %d", allowed)
+			}
+			if rejectedNewKeys != workers-4 {
+				t.Fatalf("expected %d new keys to be rejected, got %d", workers-4, rejectedNewKeys)
 			}
 		})
 	}
