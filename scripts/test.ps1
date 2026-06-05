@@ -1,8 +1,15 @@
 param(
-    [switch]$Race
+    [switch]$Race,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$RemainingArguments
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($RemainingArguments.Count -gt 0) {
+    Write-Error "usage: .\scripts\test.ps1 [-Race]"
+    exit 2
+}
 
 $root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $modules = @(
