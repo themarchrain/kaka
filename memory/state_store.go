@@ -24,7 +24,7 @@ func newStateStore[T any](opts options, create func(time.Time) T) stateStore[T] 
 	case EvictReject:
 		return newMapStore[T](opts, create)
 	case EvictLRU:
-		panic("memory: EvictLRU not implemented yet")
+		return newLRUStore[T](opts, create)
 	default:
 		panic("memory: invalid eviction policy")
 	}
