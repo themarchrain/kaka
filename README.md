@@ -1,6 +1,10 @@
 # Kaka
 
-Kaka is a small Go rate limiting library built around one core interface:
+[![CI](https://github.com/themarchrain/kaka/actions/workflows/ci.yml/badge.svg)](https://github.com/themarchrain/kaka/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/themarchrain/kaka.svg)](https://pkg.go.dev/github.com/themarchrain/kaka)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue)](https://go.dev/dl/)
+
+Kaka is a small, framework-agnostic rate limiting library for Go, built around one core interface:
 
 ```go
 type Limiter interface {
@@ -8,22 +12,31 @@ type Limiter interface {
 }
 ```
 
-The current implementation focuses on stable in-memory limiters and thin HTTP framework adapters. Redis, metrics, dashboards, and management APIs are planned as future layers, but they should stay behind the same `Limiter` / `Result` contract.
+**One contract, three algorithms.** Kaka ships token bucket, leaky bucket, and
+sliding window log limiters behind the same interface — swap strategies without
+touching your call sites.
 
-## Current Features
+**Per-key state, managed for you.** Unlike global single-limiter libraries,
+Kaka isolates state per key and handles the lifecycle (`maxKeys` cap, `keyTTL`
+expiry, lazy batched cleanup) so you don't have to build a map with cleanup
+yourself. That lifecycle management is verified end-to-end: 10 minutes of
+load at 1M requests holds memory flat at ~3 MB.
 
-- In-memory token bucket, leaky bucket, and sliding window log limiters.
-- Per-key state lifecycle controls with `WithMaxKeys`, `WithKeyTTL`, and `WithCleanupInterval`.
+**Verified against the ecosystem.** Correctness is checked request-by-request
+against `golang.org/x/time/rate` and `juju/ratelimit` (differential testing),
+and the hot path runs at **0 allocations**. See the
+[performance & correctness reports](docs/benchmarks/).
+
+## Features
+
+- Three in-memory algorithms: token bucket, leaky bucket, sliding window log.
+- Per-key isolation with `WithMaxKeys`, `WithKeyTTL`, `WithCleanupInterval`.
+- Zero-allocation hot path for all three algorithms.
+- `net/http` middleware adapter in `middleware/http`.
 - Gin middleware adapter in `middleware/gin`.
-- Standard library `net/http` middleware adapter in `middleware/http`.
-- Shared behavior tests, CI coverage, and a local test script for the module matrix.
+- Shared behavior tests, CI coverage, and a reproducible benchmark/load-test suite.
 
-The first stable-cut milestone is tagged `v0.0.1`: the core `Limiter` /
-`Result` contract, memory algorithms, lifecycle controls, and the gin / http
-adapters are frozen; follow-up releases only add capability, never change the
-contract.
-
-## Basic Usage
+## Quick Start
 
 ```go
 package main
@@ -47,19 +60,19 @@ func main() {
 }
 ```
 
-## In-Memory Options
+## Per-key Lifecycle
 
 ```go
 limiter := memory.NewTokenBucket(
     100,
     10,
-    memory.WithMaxKeys(10000),
-    memory.WithKeyTTL(time.Hour),
+    memory.WithMaxKeys(10000),     // new keys are rejected when the cap is reached
+    memory.WithKeyTTL(time.Hour),  // idle keys expire and are cleaned up lazily
     memory.WithCleanupInterval(time.Minute),
 )
 ```
 
-`maxKeys` protects local memory from unbounded key growth. When it is reached, new keys return an error while existing keys continue to use their own limiter state.
+Existing keys keep working when the cap is reached; only new keys are rejected.
 
 ## HTTP Middleware
 
@@ -81,24 +94,10 @@ router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
 
 See `examples/gin-example` for a runnable Gin server.
 
-## Performance Verification
+## Documentation
 
-Kaka publishes reproducible performance evidence comparing its in-memory
-limiters against mainstream Go rate limiters:
-
-- `golang.org/x/time/rate` (token bucket)
-- `github.com/uber-go/ratelimit` (leaky bucket)
-- `github.com/juju/ratelimit` (token bucket)
-
-Benchmark, load-test and resource-usage reports are maintained separately and
-will be published together once consolidated. Run the reproducible scripts
-yourself:
-
-```sh
-sh scripts/bench.sh          # Go benchmark comparison
-sh scripts/loadtest.sh       # HTTP load test with hey
-sh scripts/loadtest-long.sh  # long-term stability test (default 10 min)
-```
+- [Performance & correctness reports](docs/benchmarks/) — benchmarks, load
+  tests, resource usage, and differential correctness verification.
 
 ## Testing
 
@@ -112,14 +111,10 @@ Run the local CI-style matrix:
 sh ./scripts/test.sh
 ```
 
-Run the matrix plus root-module race tests when the local Go toolchain supports it:
+Race tests run on Linux via GitHub Actions (local Windows environments may
+lack the cgo/race toolchain; run `.\scripts\test.ps1 -Race` when supported).
 
-```powershell
-.\scripts\test.ps1 -Race
-```
+## Roadmap
 
-```sh
-sh ./scripts/test.sh --race
-```
-
-On some Windows environments, race tests may fail because of cgo or race runtime toolchain limitations. The GitHub Actions workflow runs race tests on Linux with cgo enabled.
+Redis-backed limiters, metrics, and management APIs are planned as future
+layers — behind the same `Limiter` / `Result` contract.
