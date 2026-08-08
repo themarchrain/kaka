@@ -3,7 +3,7 @@ package memory
 import "time"
 
 type stateStore[T any] interface {
-	getOrCreate(key string, now time.Time, create func(time.Time) T) (T, error)
+	getOrCreate(key string, now time.Time) (T, error)
 	len() int
 }
 
@@ -11,6 +11,7 @@ type mapStore[T any] struct {
 	items       map[string]*keyEntry[T]
 	opts        options
 	lastCleanup time.Time
+	create      func(time.Time) T // 构造时绑定，运行期直接调用（避免每轮闭包逃逸分配）
 }
 
 type keyEntry[T any] struct {
@@ -18,18 +19,19 @@ type keyEntry[T any] struct {
 	lastSeen time.Time
 }
 
-func newStateStore[T any](opts options) stateStore[T] {
-	return newMapStore[T](opts)
+func newStateStore[T any](opts options, create func(time.Time) T) stateStore[T] {
+	return newMapStore[T](opts, create)
 }
 
-func newMapStore[T any](opts options) *mapStore[T] {
+func newMapStore[T any](opts options, create func(time.Time) T) *mapStore[T] {
 	return &mapStore[T]{
-		items: make(map[string]*keyEntry[T]),
-		opts:  opts,
+		items:  make(map[string]*keyEntry[T]),
+		opts:   opts,
+		create: create,
 	}
 }
 
-func (s *mapStore[T]) getOrCreate(key string, now time.Time, create func(time.Time) T) (T, error) {
+func (s *mapStore[T]) getOrCreate(key string, now time.Time) (T, error) {
 	if entry, ok := s.items[key]; ok {
 		entry.lastSeen = now
 		s.cleanup(now)
@@ -42,7 +44,7 @@ func (s *mapStore[T]) getOrCreate(key string, now time.Time, create func(time.Ti
 		return zero, ErrMaxKeysExceeded
 	}
 
-	value := create(now)
+	value := s.create(now)
 	s.items[key] = &keyEntry[T]{
 		value:    value,
 		lastSeen: now,

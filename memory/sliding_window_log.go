@@ -41,7 +41,11 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 		limit:  limit,
 		window: window,
 		opts:   o,
-		store:  newStateStore[*windowState](o),
+		store: newStateStore[*windowState](o, func(now time.Time) *windowState {
+		return &windowState{
+			logs: make([]time.Time, 0),
+		}
+	}),
 	}
 }
 
@@ -54,11 +58,7 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	defer sw.mu.Unlock()
 
 	now := sw.opts.clock.Now()
-	state, err := sw.store.getOrCreate(key, now, func(now time.Time) *windowState {
-		return &windowState{
-			logs: make([]time.Time, 0),
-		}
-	})
+	state, err := sw.store.getOrCreate(key, now)
 	if err != nil {
 		return kaka.Result{}, err
 	}

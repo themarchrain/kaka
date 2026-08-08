@@ -14,19 +14,17 @@ func TestMapStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) 
 		maxKeys:         1,
 		keyTTL:          100 * time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 
-	first, err := store.getOrCreate("user:1", start, func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	first, err := store.getOrCreate("user:1", start)
 	if err != nil {
 		t.Fatalf("unexpected error creating first key: %v", err)
 	}
 
-	second, err := store.getOrCreate("user:1", start.Add(90*time.Millisecond), func(now time.Time) *bucket {
-		return &bucket{tokens: 2, lastRefilled: now}
-	})
+	second, err := store.getOrCreate("user:1", start.Add(90*time.Millisecond))
 	if err != nil {
 		t.Fatalf("unexpected error getting existing key: %v", err)
 	}
@@ -34,31 +32,26 @@ func TestMapStore_GetOrCreate_ReturnsExistingAndRefreshesLastSeen(t *testing.T) 
 		t.Fatal("expected existing key to return the original value")
 	}
 
-	_, err = store.getOrCreate("user:2", start.Add(150*time.Millisecond), func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	_, err = store.getOrCreate("user:2", start.Add(150*time.Millisecond))
 	if !errors.Is(err, ErrMaxKeysExceeded) {
 		t.Fatalf("expected refreshed existing key to block new key, got %v", err)
 	}
 }
 
 func TestMapStore_GetOrCreate_DoesNotCallCreateForExistingKey(t *testing.T) {
-	store := newMapStore[*bucket](defaultOptions())
 	now := time.Now()
 	created := 0
-
-	first, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+	store := newMapStore[*bucket](defaultOptions(), func(now time.Time) *bucket {
 		created++
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
+
+	first, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		t.Fatalf("unexpected error creating key: %v", err)
 	}
 
-	second, err := store.getOrCreate("user:1", now.Add(time.Second), func(now time.Time) *bucket {
-		created++
-		return &bucket{tokens: 2, lastRefilled: now}
-	})
+	second, err := store.getOrCreate("user:1", now.Add(time.Second))
 	if err != nil {
 		t.Fatalf("unexpected error getting existing key: %v", err)
 	}
@@ -74,25 +67,21 @@ func TestMapStore_GetOrCreate_CleansExpiredKeysWhenExistingKeyIsAccessed(t *test
 	store := newMapStore[*bucket](options{
 		keyTTL:          100 * time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 
-	active, err := store.getOrCreate("active", start, func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	active, err := store.getOrCreate("active", start)
 	if err != nil {
 		t.Fatalf("unexpected error creating active key: %v", err)
 	}
-	_, err = store.getOrCreate("expired", start, func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	_, err = store.getOrCreate("expired", start)
 	if err != nil {
 		t.Fatalf("unexpected error creating expired key: %v", err)
 	}
 
-	got, err := store.getOrCreate("active", start.Add(150*time.Millisecond), func(now time.Time) *bucket {
-		return &bucket{tokens: 2, lastRefilled: now}
-	})
+	got, err := store.getOrCreate("active", start.Add(150*time.Millisecond))
 	if err != nil {
 		t.Fatalf("unexpected error getting active key: %v", err)
 	}
@@ -109,19 +98,17 @@ func TestMapStore_GetOrCreate_CleansExpiredKeysBeforeMaxKeysCheck(t *testing.T) 
 		maxKeys:         1,
 		keyTTL:          100 * time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 
-	_, err := store.getOrCreate("user:1", start, func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	_, err := store.getOrCreate("user:1", start)
 	if err != nil {
 		t.Fatalf("unexpected error creating first key: %v", err)
 	}
 
-	second, err := store.getOrCreate("user:2", start.Add(150*time.Millisecond), func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	second, err := store.getOrCreate("user:2", start.Add(150*time.Millisecond))
 	if err != nil {
 		t.Fatalf("expected expired key to be cleaned before maxKeys check, got %v", err)
 	}
@@ -137,6 +124,8 @@ func TestMapStore_CleanupDeletesAtMostBatchSize(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		keyTTL:          time.Millisecond,
 		cleanupInterval: time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 	total := cleanupBatchSize + 10
@@ -160,6 +149,8 @@ func TestMapStore_CleanupRunsAtExactIntervalBoundary(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		keyTTL:          time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 	store.items["user:1"] = &keyEntry[*bucket]{
@@ -179,6 +170,8 @@ func TestMapStore_CleanupDoesNotRefreshLastCleanupBeforeInterval(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		keyTTL:          time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 	store.lastCleanup = start
@@ -213,7 +206,9 @@ func TestMapStore_CleanupDoesNotRefreshLastCleanupWhenDisabled(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			store := newMapStore[*bucket](tc.opts)
+			store := newMapStore[*bucket](tc.opts, func(now time.Time) *bucket {
+				return &bucket{tokens: 1, lastRefilled: now}
+			})
 			start := time.Now()
 			store.lastCleanup = start
 			store.items["user:1"] = &keyEntry[*bucket]{
@@ -237,6 +232,8 @@ func TestMapStore_CleanupRefreshesLastCleanupWhenIntervalElapses(t *testing.T) {
 	store := newMapStore[*bucket](options{
 		keyTTL:          100 * time.Millisecond,
 		cleanupInterval: 10 * time.Millisecond,
+	}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	start := time.Now()
 	now := start.Add(10 * time.Millisecond)
@@ -257,41 +254,36 @@ func TestMapStore_CleanupRefreshesLastCleanupWhenIntervalElapses(t *testing.T) {
 }
 
 func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
-	store := newMapStore[*bucket](options{maxKeys: 1})
-	now := time.Now()
-
-	_, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+	store := newMapStore[*bucket](options{maxKeys: 1}, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
+	now := time.Now()
+
+	_, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		t.Fatalf("unexpected error creating first key: %v", err)
 	}
 
-	_, err = store.getOrCreate("user:2", now, func(now time.Time) *bucket {
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	_, err = store.getOrCreate("user:2", now)
 	if !errors.Is(err, ErrMaxKeysExceeded) {
 		t.Fatalf("expected ErrMaxKeysExceeded, got %v", err)
 	}
 }
 
 func TestMapStore_GetOrCreate_DoesNotCallCreateWhenMaxKeysReached(t *testing.T) {
-	store := newMapStore[*bucket](options{maxKeys: 1})
 	now := time.Now()
 	created := 0
-
-	_, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+	store := newMapStore[*bucket](options{maxKeys: 1}, func(now time.Time) *bucket {
 		created++
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
+
+	_, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		t.Fatalf("unexpected error creating first key: %v", err)
 	}
 
-	_, err = store.getOrCreate("user:2", now, func(now time.Time) *bucket {
-		created++
-		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	_, err = store.getOrCreate("user:2", now)
 	if !errors.Is(err, ErrMaxKeysExceeded) {
 		t.Fatalf("expected ErrMaxKeysExceeded, got %v", err)
 	}

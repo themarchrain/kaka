@@ -42,7 +42,12 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
-		store:    newStateStore[*leakyState](o),
+		store: newStateStore[*leakyState](o, func(now time.Time) *leakyState {
+		return &leakyState{
+			water:    0, // 初始空桶
+			lastLeak: now,
+		}
+	}),
 	}
 }
 
@@ -55,12 +60,7 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	defer lb.mu.Unlock()
 
 	now := lb.opts.clock.Now()
-	b, err := lb.store.getOrCreate(key, now, func(now time.Time) *leakyState {
-		return &leakyState{
-			water:    0, // 初始空桶
-			lastLeak: now,
-		}
-	})
+	b, err := lb.store.getOrCreate(key, now)
 	if err != nil {
 		return kaka.Result{}, err
 	}

@@ -43,7 +43,12 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
-		store:    newStateStore[*bucket](o),
+		store: newStateStore[*bucket](o, func(now time.Time) *bucket {
+		return &bucket{
+			tokens:       capacity, // 初始默认满桶
+			lastRefilled: now,
+		}
+	}),
 	}
 }
 
@@ -56,12 +61,7 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	defer tb.mu.Unlock()
 
 	now := tb.opts.clock.Now()
-	b, err := tb.store.getOrCreate(key, now, func(now time.Time) *bucket {
-		return &bucket{
-			tokens:       tb.capacity, // 初始默认满桶
-			lastRefilled: now,
-		}
-	})
+	b, err := tb.store.getOrCreate(key, now)
 	if err != nil {
 		return kaka.Result{}, err
 	}

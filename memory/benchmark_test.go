@@ -197,10 +197,10 @@ func BenchmarkLeakyBucketAllowParallel(b *testing.B) {
 
 func BenchmarkMapStoreGetExisting(b *testing.B) {
 	now := time.Unix(100, 0)
-	store := newMapStore[*bucket](defaultOptions())
-	state, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+	store := newMapStore[*bucket](defaultOptions(), func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
+	state, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -209,9 +209,7 @@ func BenchmarkMapStoreGetExisting(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		got, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
-			return &bucket{tokens: 2, lastRefilled: now}
-		})
+		got, err := store.getOrCreate("user:1", now)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -224,15 +222,15 @@ func BenchmarkMapStoreGetExisting(b *testing.B) {
 
 func BenchmarkMapStoreCreateNewKey(b *testing.B) {
 	now := time.Unix(100, 0)
-	store := newMapStore[*bucket](defaultOptions())
+	store := newMapStore[*bucket](defaultOptions(), func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		got, err := store.getOrCreate(fmt.Sprintf("user:%d", i), now, func(now time.Time) *bucket {
-			return &bucket{tokens: 1, lastRefilled: now}
-		})
+		got, err := store.getOrCreate(fmt.Sprintf("user:%d", i), now)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -242,10 +240,10 @@ func BenchmarkMapStoreCreateNewKey(b *testing.B) {
 
 func BenchmarkMapStoreRejectNewKeyWhenFull(b *testing.B) {
 	now := time.Unix(100, 0)
-	store := newMapStore[*bucket](options{maxKeys: 1})
-	_, err := store.getOrCreate("user:1", now, func(now time.Time) *bucket {
+	store := newMapStore[*bucket](options{maxKeys: 1}, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
+	_, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -254,9 +252,7 @@ func BenchmarkMapStoreRejectNewKeyWhenFull(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := store.getOrCreate("user:2", now, func(now time.Time) *bucket {
-			return &bucket{tokens: 1, lastRefilled: now}
-		})
+		_, err := store.getOrCreate("user:2", now)
 		if err != ErrMaxKeysExceeded {
 			b.Fatalf("expected ErrMaxKeysExceeded, got %v", err)
 		}
@@ -272,6 +268,8 @@ func BenchmarkMapStoreCleanupScan(b *testing.B) {
 				maxKeys:         size + 1,
 				keyTTL:          time.Hour,
 				cleanupInterval: time.Nanosecond,
+			}, func(now time.Time) *bucket {
+				return &bucket{tokens: 1, lastRefilled: now}
 			})
 			for i := 0; i < size; i++ {
 				store.items[fmt.Sprintf("seed:%d", i)] = &keyEntry[*bucket]{
