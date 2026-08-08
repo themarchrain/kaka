@@ -17,7 +17,8 @@ $modules = @(
     "middleware/gin",
     "middleware/http",
     "examples/http-example",
-    "examples/gin-example"
+    "examples/gin-example",
+    "benchmarks"
 )
 
 function Invoke-GoTest {

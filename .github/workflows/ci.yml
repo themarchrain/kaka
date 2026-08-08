@@ -22,6 +22,7 @@ jobs:
           - middleware/http
           - examples/http-example
           - examples/gin-example
+          - benchmarks
 
     steps:
       - name: Checkout

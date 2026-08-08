@@ -26,6 +26,7 @@ middleware/gin
 middleware/http
 examples/http-example
 examples/gin-example
+benchmarks
 "
 
 for module in $modules; do
