@@ -31,6 +31,7 @@ and the hot path runs at **0 allocations**. See the
 
 - Three in-memory algorithms: token bucket, leaky bucket, sliding window log.
 - Per-key isolation with `WithMaxKeys`, `WithKeyTTL`, `WithCleanupInterval`.
+- `WithEvictionPolicy`: LRU eviction when the key cap is reached, instead of rejecting new keys.
 - Zero-allocation hot path for all three algorithms.
 - `net/http` middleware adapter in `middleware/http`.
 - Gin middleware adapter in `middleware/gin`.
@@ -66,11 +67,28 @@ func main() {
 limiter := memory.NewTokenBucket(
     100,
     10,
-    memory.WithMaxKeys(10000),     // new keys are rejected when the cap is reached
+    memory.WithMaxKeys(10000),     // cap the number of tracked keys
     memory.WithKeyTTL(time.Hour),  // idle keys expire and are cleaned up lazily
     memory.WithCleanupInterval(time.Minute),
 )
 ```
+
+By default, when the cap is reached new keys are rejected with
+`ErrMaxKeysExceeded`. To evict the least recently used key instead of
+rejecting, opt in:
+
+```go
+limiter := memory.NewTokenBucket(
+    100,
+    10,
+    memory.WithMaxKeys(10000),
+    memory.WithEvictionPolicy(memory.EvictLRU), // evict least-recently-used key for new keys
+)
+```
+
+Note: with `EvictLRU`, an evicted key starts fresh (full bucket) when it
+returns — its previous rate-limit state is gone. Use the default reject
+policy when strict limit semantics must not be bypassed by eviction.
 
 Existing keys keep working when the cap is reached; only new keys are rejected.
 

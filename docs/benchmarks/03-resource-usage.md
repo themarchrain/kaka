@@ -26,7 +26,7 @@ per-key in-memory store.
 | Aspect | Kaka | ulule | x/time/rate, juju, uber |
 |---|---|---|---|
 | per-key isolation | ✅ | ✅ | ❌ global single limiter |
-| key cap | ✅ `maxKeys` (reject new) | ❌ TTL only | — |
+| key cap | ✅ `maxKeys` (reject new, or LRU evict with `WithEvictionPolicy`) | ❌ TTL only | — |
 | cleanup | lazy, batched (≤100/access) | background goroutine, periodic | — |
 | hot-path allocs | 0 | 2 | 0 |
 | bytes/key (100k keys) | 3.3 | 201 | — |
