@@ -99,6 +99,9 @@ sh scripts/bench.sh      # Go benchmark comparison
 sh scripts/loadtest.sh   # HTTP load test with hey
 ```
 
+Reports are regenerable with the scripts above; raw data and conclusions are
+kept out of git by design.
+
 ## Testing
 
 Run the local CI-style matrix:
