@@ -19,6 +19,7 @@ type options struct {
 	keyTTL          time.Duration
 	cleanupInterval time.Duration
 	clock           clock
+	eviction        EvictionPolicy
 }
 
 func defaultOptions() options {
@@ -45,6 +46,9 @@ func (o *options) validate() {
 	}
 	if o.clock == nil {
 		panic("memory: clock must not be nil")
+	}
+	if o.eviction < EvictReject || o.eviction > EvictLRU {
+		panic("memory: invalid eviction policy")
 	}
 }
 
