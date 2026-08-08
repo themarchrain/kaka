@@ -90,17 +90,15 @@ limiters against mainstream Go rate limiters:
 - `github.com/uber-go/ratelimit` (leaky bucket)
 - `github.com/juju/ratelimit` (token bucket)
 
-Benchmark and HTTP load-test results, methodology, and conclusions live in
-`docs/superpowers/benchmarks/` (local working documents, not part of the git
-repository). Run them yourself:
+Benchmark, load-test and resource-usage reports are maintained separately and
+will be published together once consolidated. Run the reproducible scripts
+yourself:
 
 ```sh
-sh scripts/bench.sh      # Go benchmark comparison
-sh scripts/loadtest.sh   # HTTP load test with hey
+sh scripts/bench.sh          # Go benchmark comparison
+sh scripts/loadtest.sh       # HTTP load test with hey
+sh scripts/loadtest-long.sh  # long-term stability test (default 10 min)
 ```
-
-Reports are regenerable with the scripts above; raw data and conclusions are
-kept out of git by design.
 
 ## Testing
 
