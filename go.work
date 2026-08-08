@@ -2,7 +2,8 @@ go 1.25.1
 
 use (
 	.
+	./benchmarks
+	./examples/gin-example
 	./examples/http-example
 	./middleware/gin
-	./examples/gin-example
 )
