@@ -262,15 +262,13 @@ func TestNewStateStore_RejectPolicyReturnsMapStore(t *testing.T) {
 	}
 }
 
-func TestNewStateStore_LRUPolicyNotImplementedYet(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic for unimplemented EvictLRU")
-		}
-	}()
-	_ = newStateStore[*bucket](options{eviction: EvictLRU}, func(now time.Time) *bucket {
+func TestNewStateStore_LRUPolicyReturnsClockStore(t *testing.T) {
+	store := newStateStore[*bucket](options{eviction: EvictLRU}, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
+	if _, ok := store.(*clockStore[*bucket]); !ok {
+		t.Fatalf("expected *clockStore for EvictLRU, got %T", store)
+	}
 }
 
 func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
