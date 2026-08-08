@@ -9,7 +9,10 @@ esac
 script_dir=$(CDPATH= cd -- "$script_dir_path" && pwd)
 root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 : "${KAKA_RAW_DIR:=docs/benchmarks/raw}"
-out_dir="$root/$KAKA_RAW_DIR"
+case "$KAKA_RAW_DIR" in
+    /*) out_dir=$KAKA_RAW_DIR ;;
+    *) out_dir="$root/$KAKA_RAW_DIR" ;;
+esac
 mkdir -p "$out_dir"
 
 stamp=$(date +%Y%m%d-%H%M%S)
