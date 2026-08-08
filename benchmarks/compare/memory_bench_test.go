@@ -57,6 +57,47 @@ func TestMemoryFootprintPerKey(t *testing.T) {
 	}
 }
 
+// measureTotalAlloc 返回 fn 期间累计分配字节（TotalAlloc 差值，单调递增，
+// 不受 GC 空闲堆复用影响——适合同进程内对比两个实现的每 key 存储成本）。
+func measureTotalAlloc(fn func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	fn()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// TestMemoryFootprintLRU 对比同一 limiter 在默认拒绝（mapStore）与 LRU 淘汰（lruStore）
+// 下的每 key 累计分配（含存储结构 + map 扩容）。
+func TestMemoryFootprintLRU(t *testing.T) {
+	ctx := context.Background()
+	for _, n := range []int{100, 10000, 100000} {
+		rejectAlloc := measureTotalAlloc(func() {
+			limiter := memory.NewTokenBucket(100, 10,
+				memory.WithMaxKeys(int(n+1000)),
+				memory.WithKeyTTL(time.Hour),
+			)
+			for i := 0; i < n; i++ {
+				_, _ = limiter.Allow(ctx, fmt.Sprintf("user:%d", i))
+			}
+		})
+
+		lruAlloc := measureTotalAlloc(func() {
+			limiter := memory.NewTokenBucket(100, 10,
+				memory.WithMaxKeys(int(n+1000)),
+				memory.WithKeyTTL(time.Hour),
+				memory.WithEvictionPolicy(memory.EvictLRU),
+			)
+			for i := 0; i < n; i++ {
+				_, _ = limiter.Allow(ctx, fmt.Sprintf("user:%d", i))
+			}
+		})
+
+		t.Logf("keys=%-6d  mapStore=%dB (%.1f B/key)  lruStore=%dB (%.1f B/key)  diff=+%dB/key",
+			n, rejectAlloc, float64(rejectAlloc)/float64(n), lruAlloc, float64(lruAlloc)/float64(n), (lruAlloc-rejectAlloc)/uint64(n))
+	}
+}
+
 // BenchmarkKakaTokenBucketHotPath 与 BenchmarkUluleHotPath 对比热路径分配率。
 func BenchmarkKakaTokenBucketHotPath(b *testing.B) {
 	ctx := context.Background()
