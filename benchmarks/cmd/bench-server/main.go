@@ -3,13 +3,19 @@
 // --impl xtime：x/time/rate 全局 limiter 薄中间件
 // --keymode fixed（默认）：Kaka 使用固定 key "global"，对齐 x/time/rate 全局单 limiter 语义
 // --keymode remote：Kaka 使用 RemoteAddr 作为 key（按连接分 key）
+// --keymode many：Kaka 按连接哈希分入 10000 个 key 池（多用户场景）
+// --maxkeys / --keyttl：Kaka 生命周期治理参数（0 表示不启用）
+// /metrics 端点返回内存/GC 采样，且不受限流中间件影响
 package main
 
 import (
 	"encoding/json"
 	"flag"
+	"hash/crc32"
 	"log"
 	"net/http"
+	"runtime"
+	"strconv"
 
 	"github.com/themarchrain/kaka/benchmarks/compare"
 	"github.com/themarchrain/kaka/memory"
@@ -19,26 +25,53 @@ import (
 
 func main() {
 	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime")
-	keymode := flag.String("keymode", "fixed", "kaka key mode: fixed | remote")
+	keymode := flag.String("keymode", "fixed", "kaka key mode: fixed | remote | many")
+	maxkeys := flag.Uint("maxkeys", 0, "kaka max keys (0 = unlimited)")
+	keyttl := flag.Duration("keyttl", 0, "kaka key ttl (0 = disabled)")
 	addr := flag.String("addr", ":8081", "listen address")
 	flag.Parse()
 
-	var handler http.Handler
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": "success"})
 	})
 
+	metricsMux := http.NewServeMux()
+	metricsMux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"heapAlloc":   m.HeapAlloc,
+			"heapObjects": m.HeapObjects,
+			"numGC":       m.NumGC,
+			"goroutines":  runtime.NumGoroutine(),
+		})
+	})
+
+	var handler http.Handler
 	switch *impl {
 	case "kaka":
-		limiter := memory.NewTokenBucket(100, 10)
+		var opts []memory.Option
+		if *maxkeys > 0 {
+			opts = append(opts, memory.WithMaxKeys(int(*maxkeys)))
+		}
+		if *keyttl > 0 {
+			opts = append(opts, memory.WithKeyTTL(*keyttl))
+		}
+		limiter := memory.NewTokenBucket(100, 10, opts...)
 		var keyFunc func(r *http.Request) string
 		switch *keymode {
 		case "fixed":
 			keyFunc = func(r *http.Request) string { return "global" }
 		case "remote":
 			keyFunc = func(r *http.Request) string { return r.RemoteAddr }
+		case "many":
+			// 按连接哈希分入 10000 个 key 池（多用户场景）
+			keyFunc = func(r *http.Request) string {
+				return "user:" + strconv.Itoa(int(crc32.ChecksumIEEE([]byte(r.RemoteAddr)))%10000)
+			}
 		default:
 			log.Fatalf("unknown keymode %q", *keymode)
 		}
@@ -52,8 +85,18 @@ func main() {
 		log.Fatalf("unknown impl %q", *impl)
 	}
 
-	log.Printf("bench-server (%s, keymode=%s) listening on %s", *impl, *keymode, *addr)
-	if err := http.ListenAndServe(*addr, handler); err != nil {
+	// /metrics 不受限流中间件影响
+	combined := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			metricsMux.ServeHTTP(w, r)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
+
+	log.Printf("bench-server (%s, keymode=%s, maxkeys=%d, keyttl=%s) listening on %s",
+		*impl, *keymode, *maxkeys, *keyttl, *addr)
+	if err := http.ListenAndServe(*addr, combined); err != nil {
 		log.Fatal(err)
 	}
 }
