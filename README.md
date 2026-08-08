@@ -18,6 +18,11 @@ The current implementation focuses on stable in-memory limiters and thin HTTP fr
 - Standard library `net/http` middleware adapter in `middleware/http`.
 - Shared behavior tests, CI coverage, and a local test script for the module matrix.
 
+The first stable-cut milestone is tagged `v0.0.1`: the core `Limiter` /
+`Result` contract, memory algorithms, lifecycle controls, and the gin / http
+adapters are frozen; follow-up releases only add capability, never change the
+contract.
+
 ## Basic Usage
 
 ```go
@@ -75,6 +80,24 @@ router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
 ```
 
 See `examples/gin-example` for a runnable Gin server.
+
+## Performance Verification
+
+Kaka publishes reproducible performance evidence comparing its in-memory
+limiters against mainstream Go rate limiters:
+
+- `golang.org/x/time/rate` (token bucket)
+- `github.com/uber-go/ratelimit` (leaky bucket)
+- `github.com/juju/ratelimit` (token bucket)
+
+Benchmark and HTTP load-test results, methodology, and conclusions live in
+`docs/superpowers/benchmarks/` (local working documents, not part of the git
+repository). Run them yourself:
+
+```sh
+sh scripts/bench.sh      # Go benchmark comparison
+sh scripts/loadtest.sh   # HTTP load test with hey
+```
 
 ## Testing
 
