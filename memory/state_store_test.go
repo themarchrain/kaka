@@ -253,6 +253,26 @@ func TestMapStore_CleanupRefreshesLastCleanupWhenIntervalElapses(t *testing.T) {
 	}
 }
 
+func TestNewStateStore_RejectPolicyReturnsMapStore(t *testing.T) {
+	store := newStateStore[*bucket](options{maxKeys: 1}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+	if _, ok := store.(*mapStore[*bucket]); !ok {
+		t.Fatalf("expected *mapStore for EvictReject, got %T", store)
+	}
+}
+
+func TestNewStateStore_LRUPolicyNotImplementedYet(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for unimplemented EvictLRU")
+		}
+	}()
+	_ = newStateStore[*bucket](options{eviction: EvictLRU}, func(now time.Time) *bucket {
+		return &bucket{tokens: 1, lastRefilled: now}
+	})
+}
+
 func TestMapStore_GetOrCreate_RejectsNewKeyWhenMaxKeysReached(t *testing.T) {
 	store := newMapStore[*bucket](options{maxKeys: 1}, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}

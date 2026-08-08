@@ -20,7 +20,14 @@ type keyEntry[T any] struct {
 }
 
 func newStateStore[T any](opts options, create func(time.Time) T) stateStore[T] {
-	return newMapStore[T](opts, create)
+	switch opts.eviction {
+	case EvictReject:
+		return newMapStore[T](opts, create)
+	case EvictLRU:
+		panic("memory: EvictLRU not implemented yet")
+	default:
+		panic("memory: invalid eviction policy")
+	}
 }
 
 func newMapStore[T any](opts options, create func(time.Time) T) *mapStore[T] {
