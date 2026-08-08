@@ -8,7 +8,8 @@ esac
 
 script_dir=$(CDPATH= cd -- "$script_dir_path" && pwd)
 root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-out_dir="$root/docs/superpowers/benchmarks/raw"
+: "${KAKA_RAW_DIR:=docs/benchmarks/raw}"
+out_dir="$root/$KAKA_RAW_DIR"
 mkdir -p "$out_dir"
 
 if ! command -v hey >/dev/null 2>&1; then
