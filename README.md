@@ -117,6 +117,36 @@ See `examples/gin-example` for a runnable Gin server.
 - [Performance & correctness reports](docs/benchmarks/) — benchmarks, load
   tests, resource usage, and differential correctness verification.
 
+## Redis (Distributed)
+
+The `redis` submodule provides the same contract backed by Redis state.
+Every decision happens in a single atomic Lua script (server time, per-key
+TTL, rollback-guarded); no per-instance clocks or GET/compute/SET races.
+
+```go
+import (
+    "github.com/redis/go-redis/v9"
+    redislimiter "github.com/themarchrain/kaka/redis"
+)
+
+client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+
+tb := redislimiter.NewTokenBucket(client, 100, 10)          // 100 tokens, refill 10/s
+sw := redislimiter.NewSlidingWindow(client, 100, time.Minute) // 100 req / minute
+lb := redislimiter.NewLeakyBucket(client, 100, 10)          // capacity 100, leak 10/s
+```
+
+Options: `WithKeyPrefix`, `WithKeyTTL`, `WithErrorPolicy`, `WithOnError`.
+On Redis failure the limiter degrades per policy — `ErrorFailClosed`
+(default) denies, `ErrorFailOpen` allows — and the error is always passed
+to `WithOnError`. Contract tests are shared with the in-memory
+implementations.
+
+Differences vs in-memory: server time (millisecond precision), one atomic
+Lua round-trip per request (~0.1 ms), and clock-rollback guards in
+token/leaky bucket. See [06. Redis distributed](docs/benchmarks/06-redis.md)
+for measured cost and semantics.
+
 ## Testing
 
 Run the local CI-style matrix:
