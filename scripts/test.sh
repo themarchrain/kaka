@@ -26,6 +26,7 @@ middleware/gin
 middleware/http
 examples/http-example
 examples/gin-example
+examples/redis-example
 benchmarks
 redis
 "

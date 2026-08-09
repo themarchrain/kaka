@@ -5,6 +5,7 @@ use (
 	./benchmarks
 	./examples/gin-example
 	./examples/http-example
+	./examples/redis-example
 	./middleware/gin
 	./redis
 )
