@@ -108,3 +108,90 @@ func TestSlidingWindowZSetState(t *testing.T) {
 		t.Errorf("ZCard = %d, want 3 (unique members)", count)
 	}
 }
+
+func TestSlidingWindowSlides(t *testing.T) {
+	client := testClient(t)
+	// limit=1, window=300ms：窗口滑出后恢复
+	sw := NewSlidingWindow(client, 1, 300*time.Millisecond, WithKeyPrefix(testKeyPrefix))
+
+	if res, _ := sw.Allow(context.Background(), "k1"); !res.Allowed {
+		t.Fatal("first allow should be allowed")
+	}
+	if res, _ := sw.Allow(context.Background(), "k1"); res.Allowed {
+		t.Fatal("second allow should be denied (inside window)")
+	}
+
+	time.Sleep(350 * time.Millisecond) // 等窗口滑出
+	res, err := sw.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("allow after slide: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after window slide should be allowed")
+	}
+}
+
+func TestSlidingWindowTTLReset(t *testing.T) {
+	client := testClient(t)
+	sw := NewSlidingWindow(client, 1, time.Minute,
+		WithKeyTTL(1*time.Second), WithKeyPrefix(testKeyPrefix))
+
+	if res, _ := sw.Allow(context.Background(), "ttl-key"); !res.Allowed {
+		t.Fatal("first allow should be allowed")
+	}
+	if res, _ := sw.Allow(context.Background(), "ttl-key"); res.Allowed {
+		t.Fatal("second allow should be denied")
+	}
+
+	time.Sleep(1200 * time.Millisecond) // 等 TTL 过期
+	res, err := sw.Allow(context.Background(), "ttl-key")
+	if err != nil {
+		t.Fatalf("allow after ttl: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after TTL expiry should be allowed (key recreated)")
+	}
+}
+
+func TestSlidingWindowDeletedKeyResets(t *testing.T) {
+	client := testClient(t)
+	sw := NewSlidingWindow(client, 1, time.Minute, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := sw.Allow(context.Background(), "del-key"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	client.Del(context.Background(), testKeyPrefix+"del-key")
+
+	res, err := sw.Allow(context.Background(), "del-key")
+	if err != nil {
+		t.Fatalf("allow after delete: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after DEL should be allowed (recreated)")
+	}
+}
+
+func TestSlidingWindowRetryAfterBoundary(t *testing.T) {
+	client := testClient(t)
+	sw := NewSlidingWindow(client, 1, 500*time.Millisecond, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := sw.Allow(context.Background(), "k1"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond) // 让最早条目"变老" 100ms
+
+	res, err := sw.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("second allow: %v", err)
+	}
+	if res.Allowed {
+		t.Fatal("second allow should be denied")
+	}
+	// RetryAfter 应 ≈ 400ms（500 - 100），允许少量误差
+	if res.RetryAfter <= 0 || res.RetryAfter > 500*time.Millisecond {
+		t.Errorf("retryAfter = %v, want in (0, 500ms]", res.RetryAfter)
+	}
+	if res.RetryAfter < 300*time.Millisecond {
+		t.Errorf("retryAfter = %v, want >= ~300ms (oldest entry is ~100ms old)", res.RetryAfter)
+	}
+}
