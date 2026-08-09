@@ -9,6 +9,7 @@ Performance, resource-usage, and correctness evidence for Kaka, all reproducible
 | [03. Resource usage](03-resource-usage.md) | Memory per key, allocation rate, GC, long-term stability | commands inside |
 | [04. Correctness verification](04-correctness-verification.md) | Request-by-request differential tests + algorithm invariants | commands inside |
 | [05. LRU eviction](05-lru-eviction.md) | Cost of `WithEvictionPolicy(EvictLRU)`: throughput, memory, semantics | `go test -run TestMemoryFootprintLRU -v ./compare/` |
+| [06. Redis distributed](06-redis.md) | Atomic Lua algorithms, latency / QPS baseline, end-to-end vs in-memory | commands inside |
 
 ## Key results
 
