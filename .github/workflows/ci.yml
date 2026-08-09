@@ -56,3 +56,9 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: go test -race -count=1 ./...
+
+      - name: Run redis race tests
+        if: matrix.module == 'redis'
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 ./...
