@@ -59,30 +59,46 @@ Same network path (Windows → WSL2 virtual NIC), direct go-redis:
 | GET single, 1 goroutine      | 109.6µs| 9.1k  |
 | GET parallel, 64 goroutines  | 14.1µs | 70.8k |
 | EVALSHA (TB script), 64      | 20.3µs | 49.2k |
+| ulule/limiter Redis, 64      | 15.8µs | 63.3k |
+| ulule/limiter Redis, single  | 134.1µs| —     |
 
 - ~110µs per single request is the virtual-NIC round-trip (a bare GET
   costs the same); it disappears under concurrency once requests pipeline.
 - The script is only ~44% slower than a single GET (4–6 commands + Lua
   interpretation) — the real Redis-side cost of this design.
+- Against the mainstream alternative: our single-request latency is 17%
+  lower than `ulule/limiter` (114.5µs vs 134.1µs); its fixed-window script
+  is 14% faster at 64 concurrency (63.3k vs 55.3k QPS) because it issues
+  fewer commands. Same magnitude — both sit at Redis's single-threaded Lua
+  boundary.
 - The end-to-end HTTP result (412 QPS) is therefore **not bounded by
-  Redis**: the same path sustains ~49k EVALSHA QPS directly. The HTTP
-  bottleneck lives in the client/server connection handling of the load
-  test (hey 100 connections → bench-server), not in the limiter or Redis.
-  Redis-side capability is the direct-connection numbers above.
+  Redis**: the same path sustains ~49k EVALSHA QPS directly, and ulule
+  scores 467 QPS on the identical HTTP load (±13%). The HTTP bottleneck
+  lives in the client/server connection handling of the load test (hey
+  100 connections → bench-server), not in the limiter or Redis.
 
 ## End-to-end (HTTP, hey 100k × 100 concurrency)
 
-| Impl  | QPS  | p50   | p99   | Allowed/Total |
-|-------|------|-------|-------|---------------|
-| kaka  | 1248 | 0.5ms | 4.1ms | 108/99892     |
-| xtime | 1322 | 0.5ms | 4.0ms | 107/99893     |
-| redis | 412  | 2.3ms | 4.7ms | 124/99876     |
+| Impl       | QPS  | p50   | p99   | Allowed/Total |
+|------------|------|-------|-------|---------------|
+| kaka       | 1248 | 0.5ms | 4.1ms | 108/99892     |
+| xtime      | 1322 | 0.5ms | 4.0ms | 107/99893     |
+| redis      | 412  | 2.3ms | 4.7ms | 124/99876     |
+| ulule redis| 467  | 2.0ms | 5.0ms | 300/99700     |
 
 Redis QPS is ~3× lower and p50 ~4.6× higher than the in-memory
 implementations — the measurable cost of a network round-trip per
 decision. The 200/429 distribution stays aligned (small delta is
 millisecond server-time granularity). p99 converges because it is
 dominated by hey connection scheduling at 100 concurrency.
+
+**Authority comparison:** the mainstream Go Redis limiter (`ulule/limiter`
+v3, fixed-window, same link) ends at 467 QPS under the identical load —
+within ±13% of ours. The 412 QPS number is therefore a property of the
+load-test link (hey 100 connections → bench-server → WSL virtual NIC),
+not of our implementation. ulule allows more requests (300 vs 124) because
+a fixed window bursts its whole quota at each boundary; our token bucket is
+stricter and smoother.
 
 ## Design semantics
 

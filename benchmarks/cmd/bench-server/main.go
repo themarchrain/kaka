@@ -18,17 +18,21 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/themarchrain/kaka"
 	"github.com/themarchrain/kaka/benchmarks/compare"
 	"github.com/themarchrain/kaka/memory"
 	httpmiddleware "github.com/themarchrain/kaka/middleware/http"
 	redislimiter "github.com/themarchrain/kaka/redis"
+	"github.com/ulule/limiter/v3"
+	ululeredis "github.com/ulule/limiter/v3/drivers/store/redis"
 	"golang.org/x/time/rate"
 )
 
 func main() {
-	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime | redis")
+	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime | redis | ulule")
 	keymode := flag.String("keymode", "fixed", "kaka key mode: fixed | remote | many")
 	maxkeys := flag.Uint("maxkeys", 0, "kaka max keys (0 = unlimited)")
 	keyttl := flag.Duration("keyttl", 0, "kaka key ttl (0 = disabled)")
@@ -100,6 +104,22 @@ func main() {
 			Limiter: limiter,
 			KeyFunc: func(r *http.Request) string { return "global" },
 		})(mux)
+	case "ulule":
+		// 权威对照：ulule/limiter RedisStore（固定窗口），同一链路
+		redisAddr := os.Getenv("REDIS_ADDR")
+		if redisAddr == "" {
+			redisAddr = "127.0.0.1:6379"
+		}
+		client := redis.NewClient(&redis.Options{Addr: redisAddr})
+		store, err := ululeredis.NewStoreWithOptions(client, limiter.StoreOptions{Prefix: "ulule"})
+		if err != nil {
+			log.Fatalf("ulule store: %v", err)
+		}
+		lim := limiter.New(store, limiter.Rate{Period: time.Second, Limit: 100})
+		handler = httpmiddleware.Middleware(httpmiddleware.Config{
+			Limiter: ululeAdapter{lim},
+			KeyFunc: func(r *http.Request) string { return "global" },
+		})(mux)
 	default:
 		log.Fatalf("unknown impl %q", *impl)
 	}
@@ -118,4 +138,20 @@ func main() {
 	if err := http.ListenAndServe(*addr, combined); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// ululeAdapter 把 ulule/limiter 适配为 kaka.Limiter 接口（权威对照用途）。
+type ululeAdapter struct {
+	l *limiter.Limiter
+}
+
+func (u ululeAdapter) Allow(ctx context.Context, key string) (kaka.Result, error) {
+	c, err := u.l.Get(ctx, key)
+	if err != nil {
+		return kaka.Result{}, err
+	}
+	return kaka.Result{
+		Allowed:   !c.Reached,
+		Remaining: c.Remaining,
+	}, nil
 }
