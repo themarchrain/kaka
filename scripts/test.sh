@@ -27,6 +27,7 @@ middleware/http
 examples/http-example
 examples/gin-example
 benchmarks
+redis
 "
 
 for module in $modules; do

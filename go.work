@@ -6,4 +6,5 @@ use (
 	./examples/gin-example
 	./examples/http-example
 	./middleware/gin
+	./redis
 )
