@@ -33,3 +33,16 @@ func TestContractSlidingWindow(t *testing.T) {
 		},
 	})
 }
+
+// TestContractLeakyBucket 复用与 memory 相同的共享行为测试。
+func TestContractLeakyBucket(t *testing.T) {
+	client := testClient(t)
+	contracttest.RunLimiterBehaviorTests(t, []contracttest.LimiterCase{
+		{
+			Name: "redis-leaky-bucket",
+			New: func() contracttest.Limiter {
+				return NewLeakyBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
+			},
+		},
+	})
+}
