@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/themarchrain/kaka"
 )
@@ -103,5 +104,88 @@ func TestLeakyBucketHashState(t *testing.T) {
 	}
 	if _, ok := vals["last_leak_ms"]; !ok {
 		t.Errorf("hash fields = %v, want last_leak_ms field", vals)
+	}
+}
+
+func TestLeakyBucketLeaksOverTime(t *testing.T) {
+	client := testClient(t)
+	// capacity=1, rate=4/s：等 ~300ms 漏掉 1+ 滴水后恢复
+	lb := NewLeakyBucket(client, 1, 4, WithKeyPrefix(testKeyPrefix))
+
+	if res, _ := lb.Allow(context.Background(), "k1"); !res.Allowed {
+		t.Fatal("first allow should be allowed")
+	}
+	if res, _ := lb.Allow(context.Background(), "k1"); res.Allowed {
+		t.Fatal("second allow should be denied (bucket full)")
+	}
+
+	time.Sleep(300 * time.Millisecond) // 漏掉 ~1.2 滴水
+	res, err := lb.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("allow after leak: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after 300ms should be allowed (water leaked)")
+	}
+}
+
+func TestLeakyBucketTTLReset(t *testing.T) {
+	client := testClient(t)
+	lb := NewLeakyBucket(client, 1, 1,
+		WithKeyTTL(1*time.Second), WithKeyPrefix(testKeyPrefix))
+
+	if res, _ := lb.Allow(context.Background(), "ttl-key"); !res.Allowed {
+		t.Fatal("first allow should be allowed")
+	}
+	if res, _ := lb.Allow(context.Background(), "ttl-key"); res.Allowed {
+		t.Fatal("second allow should be denied")
+	}
+
+	time.Sleep(1200 * time.Millisecond) // 等 TTL 过期
+	res, err := lb.Allow(context.Background(), "ttl-key")
+	if err != nil {
+		t.Fatalf("allow after ttl: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after TTL expiry should be allowed (key recreated empty)")
+	}
+}
+
+func TestLeakyBucketDeletedKeyResets(t *testing.T) {
+	client := testClient(t)
+	lb := NewLeakyBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := lb.Allow(context.Background(), "del-key"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	client.Del(context.Background(), testKeyPrefix+"del-key")
+
+	res, err := lb.Allow(context.Background(), "del-key")
+	if err != nil {
+		t.Fatalf("allow after delete: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after DEL should be allowed (recreated empty bucket)")
+	}
+}
+
+func TestLeakyBucketRetryAfterBoundary(t *testing.T) {
+	client := testClient(t)
+	// capacity=1, rate=10/s：满桶后 retry ≈ 100ms
+	lb := NewLeakyBucket(client, 1, 10, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := lb.Allow(context.Background(), "k1"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	res, err := lb.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("second allow: %v", err)
+	}
+	if res.Allowed {
+		t.Fatal("second allow should be denied")
+	}
+	// overflow = 1，retry = ceil(1 / 10 * 1000) = 100ms，允许误差
+	if res.RetryAfter <= 0 || res.RetryAfter > 300*time.Millisecond {
+		t.Errorf("retryAfter = %v, want ~100ms", res.RetryAfter)
 	}
 }
