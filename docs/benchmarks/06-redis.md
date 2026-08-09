@@ -1,6 +1,6 @@
 # 06. Redis Distributed Rate Limiting
 
-> Measured: 2026-08-09 · Go 1.25.1 · WSL Redis 7 (172.23.155.132) · Intel i7-13620H
+> Measured: 2026-08-09 · Go 1.25.1 · WSL Redis 7 (local) · Intel i7-13620H
 > Reproduce: see commands at the bottom
 
 ## Conclusion
@@ -115,10 +115,10 @@ stricter and smoother.
 
 ```bash
 # algorithm baseline (needs real Redis)
-REDIS_ADDR=172.23.155.132:6379 go test -run '^$' -bench 'BenchmarkRedis' -benchmem -count=1 -benchtime=3s ./benchmarks/compare/
+REDIS_ADDR=127.0.0.1:6379 go test -run '^$' -bench 'BenchmarkRedis' -benchmem -count=1 -benchtime=3s ./benchmarks/compare/
 
 # concurrency sweep (direct, no HTTP)
-REDIS_ADDR=172.23.155.132:6379 go test -run '^$' -bench 'BenchmarkRedisConcurrencySweep' -benchtime=3s -count=1 ./benchmarks/compare/
+REDIS_ADDR=127.0.0.1:6379 go test -run '^$' -bench 'BenchmarkRedisConcurrencySweep' -benchtime=3s -count=1 ./benchmarks/compare/
 
 # end-to-end
 cd benchmarks && go build -o /tmp/bench-server ./cmd/bench-server
