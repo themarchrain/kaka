@@ -2,6 +2,7 @@ package redis
 
 import (
 	"testing"
+	"time"
 
 	"github.com/themarchrain/kaka/internal/contracttest"
 )
@@ -15,6 +16,19 @@ func TestContractTokenBucket(t *testing.T) {
 			Name: "redis-token-bucket",
 			New: func() contracttest.Limiter {
 				return NewTokenBucket(client, 1, 1)
+			},
+		},
+	})
+}
+
+// TestContractSlidingWindow 复用与 memory 相同的共享行为测试。
+func TestContractSlidingWindow(t *testing.T) {
+	client := testClient(t)
+	contracttest.RunLimiterBehaviorTests(t, []contracttest.LimiterCase{
+		{
+			Name: "redis-sliding-window",
+			New: func() contracttest.Limiter {
+				return NewSlidingWindow(client, 1, time.Minute, WithKeyPrefix(testKeyPrefix))
 			},
 		},
 	})
