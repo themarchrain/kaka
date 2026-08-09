@@ -1,6 +1,6 @@
 # 06. Redis Distributed Rate Limiting
 
-> Measured: 2026-08-09 · Go 1.25.1 · WSL Redis 7 (local) · Intel i7-13620H
+> Measured: Go 1.25.1 · Redis 7-alpine (Docker, local) · Intel i7-13620H
 > Reproduce: see commands at the bottom
 
 ## Conclusion
