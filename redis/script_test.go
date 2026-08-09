@@ -2,25 +2,8 @@ package redis
 
 import (
 	"context"
-	"os"
 	"testing"
-
-	"github.com/redis/go-redis/v9"
 )
-
-func testClient(t *testing.T) *redis.Client {
-	t.Helper()
-	addr := os.Getenv("REDIS_ADDR")
-	if addr == "" {
-		addr = "127.0.0.1:6379"
-	}
-	client := redis.NewClient(&redis.Options{Addr: addr})
-	if err := client.Ping(context.Background()).Err(); err != nil {
-		t.Fatalf("cannot connect to redis at %s (set REDIS_ADDR): %v", addr, err)
-	}
-	t.Cleanup(func() { client.Close() })
-	return client
-}
 
 func TestScriptLoadAndRun(t *testing.T) {
 	client := testClient(t)
