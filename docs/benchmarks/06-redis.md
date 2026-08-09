@@ -50,6 +50,26 @@ extra concurrency only adds queueing. These numbers measure pure decision
 throughput (never-denied full-speed traffic); the end-to-end HTTP numbers
 below are a different measure (application layer + real 429 traffic).
 
+### Bottleneck attribution (why the HTTP number is low)
+
+Same network path (Windows → WSL2 virtual NIC), direct go-redis:
+
+| Probe                        | ns/op  | QPS   |
+|------------------------------|--------|-------|
+| GET single, 1 goroutine      | 109.6µs| 9.1k  |
+| GET parallel, 64 goroutines  | 14.1µs | 70.8k |
+| EVALSHA (TB script), 64      | 20.3µs | 49.2k |
+
+- ~110µs per single request is the virtual-NIC round-trip (a bare GET
+  costs the same); it disappears under concurrency once requests pipeline.
+- The script is only ~44% slower than a single GET (4–6 commands + Lua
+  interpretation) — the real Redis-side cost of this design.
+- The end-to-end HTTP result (412 QPS) is therefore **not bounded by
+  Redis**: the same path sustains ~49k EVALSHA QPS directly. The HTTP
+  bottleneck lives in the client/server connection handling of the load
+  test (hey 100 connections → bench-server), not in the limiter or Redis.
+  Redis-side capability is the direct-connection numbers above.
+
 ## End-to-end (HTTP, hey 100k × 100 concurrency)
 
 | Impl  | QPS  | p50   | p99   | Allowed/Total |
