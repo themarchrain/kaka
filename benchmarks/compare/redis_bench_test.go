@@ -60,3 +60,51 @@ func BenchmarkRedisTokenBucketParallel(b *testing.B) {
 }
 
 var _ = time.Second
+
+// BenchmarkRedisSlidingWindow 测量 Redis SlidingWindow 单请求延迟。
+func BenchmarkRedisSlidingWindow(b *testing.B) {
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		addr = "127.0.0.1:6379"
+	}
+	client := redis.NewClient(&redis.Options{Addr: addr})
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		b.Skipf("redis not reachable at %s: %v", addr, err)
+	}
+	defer client.Close()
+
+	sw := redislimiter.NewSlidingWindow(client, 1000000, time.Minute, redislimiter.WithKeyTTL(0))
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := sw.Allow(ctx, "bench:key"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkRedisSlidingWindowParallel 并发版。
+func BenchmarkRedisSlidingWindowParallel(b *testing.B) {
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		addr = "127.0.0.1:6379"
+	}
+	client := redis.NewClient(&redis.Options{Addr: addr, MaxRetries: 0})
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		b.Skipf("redis not reachable at %s: %v", addr, err)
+	}
+	defer client.Close()
+
+	sw := redislimiter.NewSlidingWindow(client, 1000000, time.Minute, redislimiter.WithKeyTTL(0))
+	ctx := context.Background()
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if _, err := sw.Allow(ctx, "bench:key"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
