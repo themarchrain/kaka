@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -166,5 +167,39 @@ func TestTokenBucketDeletedKeyResets(t *testing.T) {
 	}
 	if !res.Allowed {
 		t.Fatal("allow after DEL should be allowed (recreated full bucket)")
+	}
+}
+
+func TestTokenBucketClockRollback(t *testing.T) {
+	client := testClient(t)
+	tb := NewTokenBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := tb.Allow(context.Background(), "k1"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	// 模拟时钟回拨：把状态时间改到未来 5 秒
+	future := time.Now().UnixMilli() + 5000
+	if err := client.HSet(context.Background(), testKeyPrefix+"k1", "last_refilled_ms", future).Err(); err != nil {
+		t.Fatalf("hset: %v", err)
+	}
+
+	res, err := tb.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("allow after rollback: %v", err)
+	}
+	if res.Allowed {
+		t.Fatal("rollback should not grant extra tokens")
+	}
+	// 关键断言：状态时间不被改写为过去（回拨防护生效）
+	got, err := client.HGet(context.Background(), testKeyPrefix+"k1", "last_refilled_ms").Result()
+	if err != nil {
+		t.Fatalf("hget: %v", err)
+	}
+	gotMs, err := strconv.ParseInt(got, 10, 64)
+	if err != nil {
+		t.Fatalf("parse last_refilled_ms %q: %v", got, err)
+	}
+	if gotMs < future {
+		t.Errorf("last_refilled_ms rewritten to %d < future %d (rollback guard missing)", gotMs, future)
 	}
 }

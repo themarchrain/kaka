@@ -19,6 +19,11 @@ if not fields[1] then
 else
     tokens = tonumber(fields[1])
     last = tonumber(fields[2])
+    -- 时钟回拨防护：服务器时间回拨时不改写状态时间，
+    -- 用状态里的 last 继续（elapsed=0，不追补不超限）
+    if now < last then
+        now = last
+    end
 end
 
 local elapsed = now - last

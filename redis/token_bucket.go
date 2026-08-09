@@ -61,10 +61,16 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	if !ok || len(arr) != 3 {
 		return tb.base.fallback(fmt.Errorf("%w: unexpected result type %T", ErrScript, res)), nil
 	}
+	allowed, ok1 := arr[0].(int64)
+	remaining, ok2 := arr[1].(int64)
+	retryMs, ok3 := arr[2].(int64)
+	if !ok1 || !ok2 || !ok3 {
+		return tb.base.fallback(fmt.Errorf("%w: unexpected result element type %T", ErrScript, res)), nil
+	}
 	return kaka.Result{
-		Allowed:    arr[0].(int64) == 1,
-		Remaining:  arr[1].(int64),
-		RetryAfter: time.Duration(arr[2].(int64)) * time.Millisecond,
+		Allowed:    allowed == 1,
+		Remaining:  remaining,
+		RetryAfter: time.Duration(retryMs) * time.Millisecond,
 	}, nil
 }
 

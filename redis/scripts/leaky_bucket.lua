@@ -19,6 +19,11 @@ if not fields[1] then
 else
     water = tonumber(fields[1])
     last = tonumber(fields[2])
+    -- 时钟回拨防护：服务器时间回拨时不改写状态时间，
+    -- 用状态里的 last 继续（elapsed=0，不漏水不超限）
+    if now < last then
+        now = last
+    end
 end
 
 -- 漏水：elapsed * rate，水量不低于 0

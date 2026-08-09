@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -187,5 +188,39 @@ func TestLeakyBucketRetryAfterBoundary(t *testing.T) {
 	// overflow = 1，retry = ceil(1 / 10 * 1000) = 100ms，允许误差
 	if res.RetryAfter <= 0 || res.RetryAfter > 300*time.Millisecond {
 		t.Errorf("retryAfter = %v, want ~100ms", res.RetryAfter)
+	}
+}
+
+func TestLeakyBucketClockRollback(t *testing.T) {
+	client := testClient(t)
+	lb := NewLeakyBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := lb.Allow(context.Background(), "k1"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	// 模拟时钟回拨：把状态时间改到未来 5 秒
+	future := time.Now().UnixMilli() + 5000
+	if err := client.HSet(context.Background(), testKeyPrefix+"k1", "last_leak_ms", future).Err(); err != nil {
+		t.Fatalf("hset: %v", err)
+	}
+
+	res, err := lb.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("allow after rollback: %v", err)
+	}
+	if res.Allowed {
+		t.Fatal("rollback should not leak water / grant extra capacity")
+	}
+	// 关键断言：状态时间不被改写为过去（回拨防护生效）
+	got, err := client.HGet(context.Background(), testKeyPrefix+"k1", "last_leak_ms").Result()
+	if err != nil {
+		t.Fatalf("hget: %v", err)
+	}
+	gotMs, err := strconv.ParseInt(got, 10, 64)
+	if err != nil {
+		t.Fatalf("parse last_leak_ms %q: %v", got, err)
+	}
+	if gotMs < future {
+		t.Errorf("last_leak_ms rewritten to %d < future %d (rollback guard missing)", gotMs, future)
 	}
 }
