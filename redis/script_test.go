@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"sync"
 	"testing"
 )
 
@@ -51,4 +52,22 @@ func TestScriptRunAgainstDeadClient(t *testing.T) {
 	if _, err := s.Run(ctx, client, nil); err == nil {
 		t.Fatal("expected error from closed client")
 	}
+}
+
+func TestScriptConcurrentRun(t *testing.T) {
+	client := testClient(t)
+	ctx := context.Background()
+	s := NewScript("time_probe_concurrent", "return tonumber(redis.call('TIME')[1])")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := s.Run(ctx, client, nil); err != nil {
+				t.Errorf("concurrent Run: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
 }
