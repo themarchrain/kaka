@@ -4,13 +4,14 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/themarchrain/kaka"
 )
 
 func TestTokenBucketBasic(t *testing.T) {
 	client := testClient(t)
-	tb := NewTokenBucket(client, 2, 1)
+	tb := NewTokenBucket(client, 2, 1, WithKeyPrefix(testKeyPrefix))
 
 	res, err := tb.Allow(context.Background(), "user:1")
 	if err != nil || !res.Allowed {
@@ -43,7 +44,7 @@ func TestTokenBucketBasic(t *testing.T) {
 
 func TestTokenBucketKeyIsolation(t *testing.T) {
 	client := testClient(t)
-	tb := NewTokenBucket(client, 1, 1)
+	tb := NewTokenBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
 
 	if res, _ := tb.Allow(context.Background(), "a"); !res.Allowed {
 		t.Fatal("key a first allow should be allowed")
@@ -81,7 +82,7 @@ func TestTokenBucketInvalidParams(t *testing.T) {
 
 func TestTokenBucketBlankKeyError(t *testing.T) {
 	client := testClient(t)
-	tb := NewTokenBucket(client, 1, 1)
+	tb := NewTokenBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
 	for _, key := range []string{"", "   "} {
 		if _, err := tb.Allow(context.Background(), key); err == nil {
 			t.Errorf("Allow(%q) should error", key)
@@ -102,5 +103,68 @@ func TestTokenBucketPrefixApplied(t *testing.T) {
 	}
 	if strings.HasPrefix("kaka:test:tb:k1", testKeyPrefix) == false {
 		t.Error("test key must use testKeyPrefix for cleanup")
+	}
+}
+
+func TestTokenBucketRefillOverTime(t *testing.T) {
+	client := testClient(t)
+	// rate = 4/s，等 ~300ms 应补充 1+ 个令牌
+	tb := NewTokenBucket(client, 4, 4, WithKeyPrefix(testKeyPrefix))
+
+	for i := 0; i < 4; i++ {
+		if res, _ := tb.Allow(context.Background(), "k1"); !res.Allowed {
+			t.Fatalf("allow %d should be allowed (capacity)", i)
+		}
+	}
+	if res, _ := tb.Allow(context.Background(), "k1"); res.Allowed {
+		t.Fatal("5th allow should be denied (bucket empty)")
+	}
+
+	time.Sleep(300 * time.Millisecond)
+	res, err := tb.Allow(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("allow after refill: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after 300ms should be allowed (refill ~1.2 tokens)")
+	}
+}
+
+func TestTokenBucketTTLReset(t *testing.T) {
+	client := testClient(t)
+	tb := NewTokenBucket(client, 1, 1, WithKeyTTL(1*time.Second), WithKeyPrefix(testKeyPrefix))
+
+	if res, _ := tb.Allow(context.Background(), "ttl-key"); !res.Allowed {
+		t.Fatal("first allow should be allowed")
+	}
+	if res, _ := tb.Allow(context.Background(), "ttl-key"); res.Allowed {
+		t.Fatal("second allow should be denied")
+	}
+
+	time.Sleep(1200 * time.Millisecond) // 等 TTL 过期
+	res, err := tb.Allow(context.Background(), "ttl-key")
+	if err != nil {
+		t.Fatalf("allow after ttl: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after TTL expiry should be allowed (key recreated full)")
+	}
+}
+
+func TestTokenBucketDeletedKeyResets(t *testing.T) {
+	client := testClient(t)
+	tb := NewTokenBucket(client, 1, 1, WithKeyPrefix(testKeyPrefix))
+
+	if _, err := tb.Allow(context.Background(), "del-key"); err != nil {
+		t.Fatalf("first allow: %v", err)
+	}
+	client.Del(context.Background(), testKeyPrefix+"del-key")
+
+	res, err := tb.Allow(context.Background(), "del-key")
+	if err != nil {
+		t.Fatalf("allow after delete: %v", err)
+	}
+	if !res.Allowed {
+		t.Fatal("allow after DEL should be allowed (recreated full bucket)")
 	}
 }
