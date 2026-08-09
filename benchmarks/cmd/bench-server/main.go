@@ -9,22 +9,26 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"hash/crc32"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/themarchrain/kaka/benchmarks/compare"
 	"github.com/themarchrain/kaka/memory"
 	httpmiddleware "github.com/themarchrain/kaka/middleware/http"
+	redislimiter "github.com/themarchrain/kaka/redis"
 	"golang.org/x/time/rate"
 )
 
 func main() {
-	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime")
+	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime | redis")
 	keymode := flag.String("keymode", "fixed", "kaka key mode: fixed | remote | many")
 	maxkeys := flag.Uint("maxkeys", 0, "kaka max keys (0 = unlimited)")
 	keyttl := flag.Duration("keyttl", 0, "kaka key ttl (0 = disabled)")
@@ -81,6 +85,21 @@ func main() {
 		})(mux)
 	case "xtime":
 		handler = compare.RateLimitMiddleware(rate.NewLimiter(rate.Limit(10), 100), mux)
+	case "redis":
+		// Redis 分布式 TokenBucket：固定 key（对齐 kaka fixed 全局语义）
+		redisAddr := os.Getenv("REDIS_ADDR")
+		if redisAddr == "" {
+			redisAddr = "127.0.0.1:6379"
+		}
+		client := redis.NewClient(&redis.Options{Addr: redisAddr})
+		if err := client.Ping(context.Background()).Err(); err != nil {
+			log.Fatalf("redis at %s: %v", redisAddr, err)
+		}
+		limiter := redislimiter.NewTokenBucket(client, 100, 10)
+		handler = httpmiddleware.Middleware(httpmiddleware.Config{
+			Limiter: limiter,
+			KeyFunc: func(r *http.Request) string { return "global" },
+		})(mux)
 	default:
 		log.Fatalf("unknown impl %q", *impl)
 	}
