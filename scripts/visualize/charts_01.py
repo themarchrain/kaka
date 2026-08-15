@@ -22,6 +22,8 @@ GROUPS = [
 
 def build_fig01(sources: dict, charts_dir: Path) -> str:
     src = sources["bench"]
+    if not src:
+        raise RuntimeError("no bench artifact (run scripts/bench.sh)")
     meta, rows = parse_bench_text(src.read_text(encoding="utf-8", errors="replace"))
     median = median_rows(rows)
 
