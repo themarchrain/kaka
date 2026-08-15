@@ -74,3 +74,7 @@ jobs:
       - name: Check coverage
         if: matrix.module == '.'
         run: ./scripts/check-coverage.sh
+
+      - name: Fuzz short run
+        if: matrix.module == '.'
+        run: go test -run=^$ -fuzz=Fuzz -fuzztime=10s ./...
