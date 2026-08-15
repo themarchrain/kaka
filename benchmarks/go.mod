@@ -1,6 +1,6 @@
 module github.com/themarchrain/kaka/benchmarks
 
-go 1.25
+go 1.25.0
 
 replace github.com/themarchrain/kaka => ../
 
@@ -8,6 +8,7 @@ require (
 	github.com/juju/ratelimit v1.0.2
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/themarchrain/kaka v0.0.0-00010101000000-000000000000
+	github.com/themarchrain/kaka/layered v0.0.0-00010101000000-000000000000
 	github.com/themarchrain/kaka/redis v0.0.0-00010101000000-000000000000
 	github.com/ulule/limiter/v3 v3.11.2
 	go.uber.org/ratelimit v0.3.1
@@ -22,5 +23,7 @@ require (
 	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
+
+replace github.com/themarchrain/kaka/layered => ../layered
 
 replace github.com/themarchrain/kaka/redis => ../redis
