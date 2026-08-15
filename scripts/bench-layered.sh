@@ -29,6 +29,9 @@ if ! command -v hey >/dev/null 2>&1; then
 fi
 
 echo "==> end-to-end: bench-server redis (:8082) + layered (:8083), hey 10s x 64"
+# NOTE: both services share one Redis bucket (fixed key "global", default
+# prefix). Parallel hey would race for the same tokens and starve one side,
+# so hey runs serially — same methodology as report 07.
 (cd "$root/benchmarks" && go build -o "$root/benchmarks/.bench-server-bin" ./cmd/bench-server)
 bin="$root/benchmarks/.bench-server-bin"
 
@@ -39,11 +42,8 @@ pid_layered=$!
 trap 'kill $pid_redis $pid_layered 2>/dev/null || true; rm -f "$bin"' EXIT
 sleep 2
 
-hey -n 20000 -c 64 -z 10s -o csv "http://127.0.0.1:8082/api/test" > "$out_dir/loadtest-redis-$stamp.csv" &
-hey1=$!
-hey -n 20000 -c 64 -z 10s -o csv "http://127.0.0.1:8083/api/test" > "$out_dir/loadtest-layered-$stamp.csv" &
-hey2=$!
-wait $hey1 $hey2
+hey -n 20000 -c 64 -z 10s -o csv "http://127.0.0.1:8082/api/test" > "$out_dir/loadtest-redis-$stamp.csv"
+hey -n 20000 -c 64 -z 10s -o csv "http://127.0.0.1:8083/api/test" > "$out_dir/loadtest-layered-$stamp.csv"
 
 kill $pid_redis $pid_layered 2>/dev/null || true
 wait $pid_redis $pid_layered 2>/dev/null || true

@@ -14,10 +14,17 @@ import importlib
 import sys
 from pathlib import Path
 
+# Defaults resolve from this file's location so the entry works from any cwd
+# (scripts/visualize/main.py -> repo root).
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 KINDS = {
-    "bench": "benchmark-*.txt",
-    "loadtest-kaka": "loadtest-kaka-*.csv",
-    "loadtest-xtime": "loadtest-xtime-*.csv",
+    # Globs are anchored on the timestamp so they never capture sibling
+    # kinds: benchmark-* must not match benchmark-redis-* / benchmark-layered-*,
+    # loadtest-kaka-* must not match loadtest-kaka-many-*.
+    "bench": "benchmark-[0-9]*.txt",
+    "loadtest-kaka": "loadtest-kaka-[0-9]*.csv",
+    "loadtest-xtime": "loadtest-xtime-[0-9]*.csv",
     "loadtest-kaka-many": "loadtest-kaka-many-*.csv",
     "loadtest-redis": "loadtest-redis-*.csv",
     "loadtest-layered": "loadtest-layered-*.csv",
@@ -26,7 +33,7 @@ KINDS = {
     "longterm-mem": "longterm-mem-*.csv",
     "correctness": "correctness-*.txt",
     "lru": "lru-*.txt",
-    "bench-redis": "benchmark-redis-*.txt",
+    "bench-redis": "benchmark-redis-[0-9]*.txt",
     "bench-redis-sweep": "benchmark-redis-sweep-*.txt",
     "bench-layered": "benchmark-layered-*.txt",
 }
@@ -55,8 +62,8 @@ def newest(raw_dir: Path, pattern: str):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Render benchmark charts from raw artifacts")
-    ap.add_argument("--raw-dir", default="docs/benchmarks/raw")
-    ap.add_argument("--charts-dir", default="docs/benchmarks/charts")
+    ap.add_argument("--raw-dir", default=str(REPO_ROOT / "docs/benchmarks/raw"))
+    ap.add_argument("--charts-dir", default=str(REPO_ROOT / "docs/benchmarks/charts"))
     ap.add_argument("--only", default=None, help="comma-separated fig ids, e.g. fig01,fig12")
     args = ap.parse_args()
 

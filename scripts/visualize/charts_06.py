@@ -50,8 +50,10 @@ def build_fig10(sources: dict, charts_dir: Path) -> str:
     vals, allocs = [], []
     for n in names:
         row = median.get(n)
-        vals.append(row.ns_per_op if row else 0)
-        allocs.append(row.allocs_per_op if row else None)
+        if row is None:
+            raise RuntimeError(f"missing {n} in {src.name} (Redis reachable?)")
+        vals.append(row.ns_per_op)
+        allocs.append(row.allocs_per_op)
     ax.bar(labels, vals, color=KAKA_BLUE)
     for i, (v, a) in enumerate(zip(vals, allocs)):
         ax.text(i, v * 1.03, f"{v/1000:.1f} us", ha="center", fontsize=9)

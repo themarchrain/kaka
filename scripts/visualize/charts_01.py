@@ -29,10 +29,12 @@ def build_fig01(sources: dict, charts_dir: Path) -> str:
 
     fig, ax = plt.subplots(figsize=(8, 4.2))
     x = range(len(GROUPS))
+    drawn = 0
     for i, (alg, kaka_name, refs) in enumerate(GROUPS):
         kaka_row = median.get(kaka_name)
         if kaka_row is None:
             continue
+        drawn += 1
         ax.bar([i], [kaka_row.ns_per_op], color=KAKA_BLUE, width=0.5, log=True)
         ax.text(i, kaka_row.ns_per_op * 1.5, f"{kaka_row.ns_per_op:.0f} ns\n{kaka_row.allocs_per_op} allocs",
                 ha="center", fontsize=8, color="#333333")
@@ -46,6 +48,8 @@ def build_fig01(sources: dict, charts_dir: Path) -> str:
             ax.text(i, max(kaka_row.ns_per_op, ref.ns_per_op) * 1.9,
                     f"{kaka_row.ns_per_op / ref.ns_per_op:.2f}x", ha="center",
                     fontsize=9, weight="bold", color="#444444")
+    if drawn == 0:
+        raise RuntimeError(f"no kaka algorithm rows parsed from {src.name}")
     ax.set_xticks(list(x))
     ax.set_xticklabels([g[0] for g in GROUPS])
     style_axis(ax, ylabel="ns/op (log)")
