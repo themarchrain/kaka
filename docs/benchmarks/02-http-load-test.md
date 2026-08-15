@@ -1,4 +1,5 @@
 # 02. HTTP Load Tests
+> Charts: [02_http_qps.png](charts/02_http_qps.png) · [02_http_latency_percentiles.png](charts/02_http_latency_percentiles.png)
 
 End-to-end measurements through real HTTP middleware: `benchmarks/cmd/bench-server`
 with a token bucket (burst=100, rate=10/s), hammered with hey.

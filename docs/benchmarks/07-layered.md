@@ -1,4 +1,5 @@
 # 07. Layered Rate Limiting (Local Pre-check + Redis Authority)
+> Charts: [07_layered_reject_path.png](charts/07_layered_reject_path.png) · [07_layered_http.png](charts/07_layered_http.png)
 
 > Measured: Go 1.25.1 · Redis at 127.0.0.1:6379 (local WSL2 instance,
 > same instance verified by matching run_id) · Intel i7-13620H · 2026-08-15
