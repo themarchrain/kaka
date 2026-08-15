@@ -147,6 +147,37 @@ Lua round-trip per request (~0.1 ms), and clock-rollback guards in
 token/leaky bucket. See [06. Redis distributed](docs/benchmarks/06-redis.md)
 for measured cost and semantics.
 
+## Layered Rate Limiting
+
+For deployments that need Redis' distributed quota but want to absorb
+rejection floods locally, the `layered` module composes an in-memory limiter
+(local pre-check) with a Redis limiter (authoritative remote layer):
+
+```go
+import (
+    "github.com/themarchrain/kaka/layered"
+    "github.com/themarchrain/kaka/memory"
+    redislimiter "github.com/themarchrain/kaka/redis"
+)
+
+local := memory.NewTokenBucket(100, 10)
+remote := redislimiter.NewTokenBucket(client, 100, 10)
+limiter := layered.New(local, remote)
+```
+
+Requests denied by the local layer never touch Redis — denial costs
+nanoseconds instead of a network round trip — while every allowed request
+is still confirmed by the remote layer, so the distributed quota is never
+exceeded. Measured: ~8,200× faster denial path, zero allocations, no
+overhead on the allow path (see
+[07. Layered](docs/benchmarks/07-layered.md)).
+
+The semantics are approximate: the local layer drifts stricter than the
+remote layer over time, and a local denial can overestimate `RetryAfter`.
+Use the same algorithm and parameters for both layers, give the local layer
+a `WithMaxKeys` bound and `WithKeyTTL` for lifecycle management, and
+`go get github.com/themarchrain/kaka/layered` to use it.
+
 ## Testing
 
 Run the local CI-style matrix:
@@ -167,6 +198,7 @@ lack the cgo/race toolchain; run `.\scripts\test.ps1 -Race` when supported).
 Completed:
 - v0.1.0: Redis-backed limiters (atomic Lua scripts, distributed)
 - v0.1.1: English API documentation
+- v0.2.0: Layered rate limiting (local pre-check + Redis authority)
 
-Planned: layered rate limiting (in-memory pre-check + Redis fallback),
-metrics, and management APIs — behind the same `Limiter` / `Result` contract.
+Planned: metrics and management APIs — behind the same `Limiter` / `Result`
+contract.

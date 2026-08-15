@@ -1,6 +1,7 @@
 // Command bench-server 启动一个 HTTP 压测目标服务。
 // --impl kaka：Kaka httpmiddleware + memory TokenBucket(100, 10)
 // --impl xtime：x/time/rate 全局 limiter 薄中间件
+// --impl layered：Kaka memory 本地预检 + Redis 权威（同一 100/10 参数）
 // --keymode fixed（默认）：Kaka 使用固定 key "global"，对齐 x/time/rate 全局单 limiter 语义
 // --keymode remote：Kaka 使用 RemoteAddr 作为 key（按连接分 key）
 // --keymode many：Kaka 按连接哈希分入 10000 个 key 池（多用户场景）
@@ -23,6 +24,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/themarchrain/kaka"
 	"github.com/themarchrain/kaka/benchmarks/compare"
+	"github.com/themarchrain/kaka/layered"
 	"github.com/themarchrain/kaka/memory"
 	httpmiddleware "github.com/themarchrain/kaka/middleware/http"
 	redislimiter "github.com/themarchrain/kaka/redis"
@@ -32,7 +34,7 @@ import (
 )
 
 func main() {
-	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime | redis | ulule")
+	impl := flag.String("impl", "kaka", "limiter implementation: kaka | xtime | redis | layered | ulule")
 	keymode := flag.String("keymode", "fixed", "kaka key mode: fixed | remote | many")
 	maxkeys := flag.Uint("maxkeys", 0, "kaka max keys (0 = unlimited)")
 	keyttl := flag.Duration("keyttl", 0, "kaka key ttl (0 = disabled)")
@@ -100,6 +102,24 @@ func main() {
 			log.Fatalf("redis at %s: %v", redisAddr, err)
 		}
 		limiter := redislimiter.NewTokenBucket(client, 100, 10)
+		handler = httpmiddleware.Middleware(httpmiddleware.Config{
+			Limiter: limiter,
+			KeyFunc: func(r *http.Request) string { return "global" },
+		})(mux)
+	case "layered":
+		// 分层限流：内存本地预检 + Redis 权威（同一 100/10 参数，固定 key）
+		redisAddr := os.Getenv("REDIS_ADDR")
+		if redisAddr == "" {
+			redisAddr = "127.0.0.1:6379"
+		}
+		client := redis.NewClient(&redis.Options{Addr: redisAddr})
+		if err := client.Ping(context.Background()).Err(); err != nil {
+			log.Fatalf("redis at %s: %v", redisAddr, err)
+		}
+		limiter := layered.New(
+			memory.NewTokenBucket(100, 10),
+			redislimiter.NewTokenBucket(client, 100, 10),
+		)
 		handler = httpmiddleware.Middleware(httpmiddleware.Config{
 			Limiter: limiter,
 			KeyFunc: func(r *http.Request) string { return "global" },
