@@ -70,3 +70,7 @@ jobs:
           version: v1.64.8
           working-directory: ${{ matrix.module }}
           args: --timeout=5m
+
+      - name: Check coverage
+        if: matrix.module == '.'
+        run: ./scripts/check-coverage.sh
