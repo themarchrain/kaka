@@ -33,10 +33,11 @@ func main() {
 	limiter := redislimiter.NewTokenBucket(client, 2, 1)
 
 	// Layered limiter: the in-memory layer rejects floods locally, the
-	// Redis layer stays the authoritative quota.
+	// Redis layer stays the authoritative quota. The remote layer uses a
+	// distinct key prefix so the demo routes keep independent buckets.
 	layeredLimiter := layered.New(
 		memory.NewTokenBucket(2, 1),
-		redislimiter.NewTokenBucket(client, 2, 1),
+		redislimiter.NewTokenBucket(client, 2, 1, redislimiter.WithKeyPrefix("kaka:layered:")),
 	)
 
 	keyFunc := func(r *http.Request) string {
