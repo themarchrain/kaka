@@ -54,3 +54,6 @@ docs/dev
 
 docs/benchmarks/raw/
 docs/benchmarks/charts/
+
+__pycache__/
+*.pyc
