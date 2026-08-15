@@ -10,7 +10,7 @@ import (
 	"github.com/themarchrain/kaka"
 )
 
-// Config HTTP 中间件配置
+// Config holds the HTTP middleware configuration.
 type Config struct {
 	Limiter kaka.Limiter
 
@@ -23,7 +23,7 @@ type Config struct {
 	DisableHeaders bool
 }
 
-// Middleware 创建标准库 HTTP 限流中间件
+// Middleware creates a rate limiting middleware for the standard library net/http.
 func Middleware(config Config) func(http.Handler) http.Handler {
 	if config.Limiter == nil {
 		panic("http middleware: limiter must not be nil")

@@ -10,36 +10,36 @@ import (
 	"github.com/themarchrain/kaka"
 )
 
-// Config Gin 中间件配置
+// Config holds the Gin middleware configuration.
 type Config struct {
-	// Limiter 限流器实例
+	// Limiter is the rate limiter instance.
 	Limiter kaka.Limiter
 
-	// KeyFunc 从 Gin Context 中提取限流 key 的函数
-	// 默认使用 ClientIP()
+	// KeyFunc extracts the rate limit key from a Gin context.
+	// It defaults to ClientIP().
 	KeyFunc func(c *gin.Context) string
 
-	// DeniedHandler 被限流时的自定义处理函数
-	// 默认返回 429 Too Many Requests
+	// DeniedHandler handles requests that are denied.
+	// It defaults to returning 429 Too Many Requests.
 	DeniedHandler func(c *gin.Context)
 
-	// ErrorHandler 限流器返回 error 时的自定义处理函数
-	// 默认 fail-open
+	// ErrorHandler handles errors returned by the limiter.
+	// The default is fail-open.
 	ErrorHandler func(c *gin.Context, err error)
 
-	// Headers 是否设置 X-RateLimit-* 响应头
-	// 默认 true
+	// Headers controls whether X-RateLimit-* response headers are set.
+	// Defaults to true.
 	//
 	// Deprecated: use DisableHeaders to turn headers off. This field is kept for
 	// source compatibility and no longer controls the default header behavior.
 	Headers bool
 
-	// DisableHeaders 是否禁用 X-RateLimit-* 响应头
-	// 默认 false，表示写入响应头
+	// DisableHeaders disables the X-RateLimit-* response headers.
+	// Defaults to false, meaning headers are written.
 	DisableHeaders bool
 }
 
-// NewLimiterMiddleware 创建 Gin 限流中间件
+// NewLimiterMiddleware creates a rate limiting middleware for Gin.
 func NewLimiterMiddleware(config Config) gin.HandlerFunc {
 	if config.Limiter == nil {
 		panic("gin middleware: limiter must not be nil")
