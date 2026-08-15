@@ -35,11 +35,14 @@ def style_axis(ax, xlabel=None, ylabel=None, logy=False):
     ax.grid(axis="y", alpha=0.3)
 
 
-def add_source_note(fig, sources: list[str], commands: list[str]):
-    """Footer note: raw data files + reproduce commands."""
+def add_source_note(fig, sources: list[str], commands: list[str], env: str | None = None):
+    """Footer note: raw data files + reproduce commands (+ optional env line)."""
     src = "; ".join(sources)
     cmd = " && ".join(commands)
-    fig.text(0.01, 0.005, f"data: {src}\nreproduce: {cmd}",
+    lines = [f"data: {src}", f"reproduce: {cmd}"]
+    if env:
+        lines.append(f"env: {env}")
+    fig.text(0.01, 0.005, "\n".join(lines),
              fontsize=7, color="#555555", va="bottom", ha="left")
 
 

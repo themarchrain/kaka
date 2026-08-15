@@ -32,7 +32,7 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -z)
             duration_args="-z ${2:-10s} -c 100"
-            shift 2
+            if [ "$#" -ge 2 ]; then shift 2; else shift 1; fi
             ;;
         many)
             many="kaka"

@@ -15,7 +15,7 @@ def build_fig02(sources: dict, charts_dir: Path) -> str:
         src = sources[kind]
         if not src:
             continue
-        with src.open() as f:
+        with src.open(encoding="utf-8", errors="replace") as f:
             stats.append(parse_hey_csv(f))
         files.append(src.name)
     if len(stats) != 2:
@@ -27,7 +27,7 @@ def build_fig02(sources: dict, charts_dir: Path) -> str:
     for i, s in enumerate(stats):
         ax.text(i, s.qps * 1.02, f"{s.qps:,.0f}", ha="center", fontsize=10)
     style_axis(ax, ylabel="QPS")
-    ax.set_title("HTTP load: QPS (hey 100k x 100 conn)")
+    ax.set_title("HTTP load: QPS (parameters from the data-source run)")
     add_source_note(fig, files, ["sh scripts/loadtest.sh"])
     return save(fig, charts_dir / "02_http_qps.png")
 

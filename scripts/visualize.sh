@@ -27,15 +27,18 @@ need_run() {  # $1 = glob pattern, $2 = script
     fi
 }
 
-need_run 'benchmark-*.txt'            bench.sh
+# Globs mirror main.py's KINDS: timestamp-anchored so a sibling kind
+# (benchmark-redis-*, benchmark-layered-*, loadtest-kaka-many-*) never
+# satisfies a missing-data check for another kind.
+need_run 'benchmark-[0-9]*.txt'       bench.sh
 need_run 'memory-perkey-*.txt'        bench-memory.sh
 need_run 'memory-lru-*.txt'           bench-memory.sh
 need_run 'correctness-*.txt'          bench-memory.sh
 need_run 'lru-*.txt'                  bench-lru.sh
-need_run 'loadtest-kaka-*.csv'        loadtest.sh
+need_run 'loadtest-kaka-[0-9]*.csv'   loadtest.sh
 need_run 'loadtest-xtime-*.csv'       loadtest.sh
 need_run 'loadtest-kaka-many-*.csv'   loadtest.sh
-need_run 'benchmark-redis-*.txt'      bench-redis.sh
+need_run 'benchmark-redis-[0-9]*.txt' bench-redis.sh
 need_run 'benchmark-redis-sweep-*.txt' bench-redis.sh
 need_run 'benchmark-layered-*.txt'    bench-layered.sh
 need_run 'loadtest-redis-*.csv'       bench-layered.sh
@@ -46,5 +49,19 @@ if [ "$full" = "1" ]; then
     sh "$root/scripts/loadtest-long.sh" 600
 fi
 
+# Resolve a working Python interpreter. On Windows the `python3` shim from the
+# Microsoft Store is a stub that exits with no output, so fall back to `python`.
+PY="${PYTHON:-}"
+if [ -z "$PY" ] && command -v python3 >/dev/null 2>&1; then
+    PY=python3
+fi
+if [ -z "$PY" ] && command -v python >/dev/null 2>&1; then
+    PY=python
+fi
+if [ -z "$PY" ]; then
+    echo "error: no Python interpreter found (set PYTHON to one)" >&2
+    exit 1
+fi
+
 echo "==> rendering charts"
-python3 "$root/scripts/visualize/main.py" --raw-dir "$raw_dir" --charts-dir "$charts_dir"
+"$PY" "$root/scripts/visualize/main.py" --raw-dir "$raw_dir" --charts-dir "$charts_dir"

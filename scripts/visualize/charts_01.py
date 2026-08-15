@@ -54,5 +54,6 @@ def build_fig01(sources: dict, charts_dir: Path) -> str:
     ax.set_xticklabels([g[0] for g in GROUPS])
     style_axis(ax, ylabel="ns/op (log)")
     ax.set_title("In-memory algorithm latency vs ecosystem (median of 3, -benchmem)")
-    add_source_note(fig, [src.name], ["sh scripts/bench.sh"])
+    env = f"{meta.goos}/{meta.goarch} · {meta.cpu}"
+    add_source_note(fig, [src.name], ["sh scripts/bench.sh"], env=env)
     return save(fig, charts_dir / "01_algorithm_comparison.png")

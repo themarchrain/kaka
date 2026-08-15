@@ -20,7 +20,10 @@ def parse_longterm_mem(text: str) -> pd.DataFrame:
         for token in line.split():
             if "=" in token:
                 k, _, v = token.partition("=")
-                kv[k] = int(v)
+                try:
+                    kv[k] = int(v)
+                except ValueError:
+                    continue  # tolerate malformed tokens; skip the field
         if "ts" in kv:
             records.append(kv)
     return pd.DataFrame(records, columns=list(_KEYS))

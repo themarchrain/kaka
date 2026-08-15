@@ -28,6 +28,11 @@ def build_fig09(sources: dict, charts_dir: Path) -> str:
             continue
         xs = sorted(qps)
         ax.plot(xs, [qps[x] for x in xs], marker="o", label=ALG_LABELS[alg], linewidth=2)
+        peak = max(qps, key=qps.get)
+        ax.annotate(f"peak {qps[peak]:,.0f} @{peak}",
+                    xy=(peak, qps[peak]), xytext=(peak * 1.05, qps[peak] * 0.92),
+                    fontsize=8, color="#444444",
+                    arrowprops=dict(arrowstyle="->", color="#444444", lw=0.8))
     if not any(series.values()):
         raise RuntimeError("no sweep rows parsed (Redis reachable?)")
     ax.legend()

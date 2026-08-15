@@ -57,3 +57,5 @@ docs/benchmarks/charts/
 
 __pycache__/
 *.pyc
+
+benchmarks/.bench-server-bin

@@ -45,9 +45,16 @@ def build_fig05(sources: dict, charts_dir: Path) -> str:
         raise RuntimeError(f"no sampling rows parsed from {src.name}")
 
     fig, ax = plt.subplots(figsize=(7, 3.8))
-    ax.plot(df["ts"], df["heapAlloc"] / 1e6, color=KAKA_BLUE, marker="o", markersize=3)
+    ax.plot(df["ts"], df["heapAlloc"] / 1e6, color=KAKA_BLUE, marker="o", markersize=3,
+            label="HeapAlloc")
+    if df["numGC"].max() > 0:
+        # Mark GC events: one tick per collection, size reflects collections.
+        ax.scatter(df["ts"], [0.98 * df["heapAlloc"].min() / 1e6] * len(df),
+                   s=df["numGC"].diff().fillna(0) * 8, color=COMPARE_RED, alpha=0.5,
+                   label="GC events", marker="|")
+        ax.legend()
     ax.set_xlabel("elapsed (s)")
     ax.set_ylabel("HeapAlloc (MB)")
-    ax.set_title("Long-term stability: heap stays flat under 1M requests")
+    ax.set_title("Long-term stability: heap under sustained load")
     add_source_note(fig, [src.name], ["sh scripts/loadtest-long.sh 600"])
     return save(fig, charts_dir / "03_longterm_memory.png")

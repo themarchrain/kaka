@@ -25,6 +25,7 @@ echo "==> layered direct benchmarks (count=3)"
 
 if ! command -v hey >/dev/null 2>&1; then
     echo "hey not found; skipping end-to-end HTTP comparison" >&2
+    echo "NOTE: loadtest-redis-*/loadtest-layered-* were NOT saved; visualize.sh will rerun the direct benchmarks until hey is available" >&2
     exit 0
 fi
 

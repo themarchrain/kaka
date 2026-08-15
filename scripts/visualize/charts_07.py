@@ -40,7 +40,7 @@ def build_fig13(sources: dict, charts_dir: Path) -> str:
         src = sources[kind]
         if not src:
             continue
-        with src.open() as f:
+        with src.open(encoding="utf-8", errors="replace") as f:
             stats.append(parse_hey_csv(f))
         files.append(src.name)
     if len(stats) != 2:
@@ -54,6 +54,6 @@ def build_fig13(sources: dict, charts_dir: Path) -> str:
     ratio = stats[1].qps / stats[0].qps if stats[0].qps else 0
     ax.text(0.5, max(s.qps for s in stats) * 1.06, f"{ratio:.1f}x", ha="center", fontsize=11, weight="bold")
     style_axis(ax, ylabel="QPS")
-    ax.set_title("End-to-end HTTP: layered vs pure redis (hey 10s x 64)")
+    ax.set_title("End-to-end HTTP: layered vs pure redis (parameters from the data-source run)")
     add_source_note(fig, files, ["sh scripts/bench-layered.sh"])
     return save(fig, charts_dir / "07_layered_http.png")

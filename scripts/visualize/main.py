@@ -17,6 +17,9 @@ from pathlib import Path
 # Defaults resolve from this file's location so the entry works from any cwd
 # (scripts/visualize/main.py -> repo root).
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 KINDS = {
     # Globs are anchored on the timestamp so they never capture sibling
@@ -94,6 +97,10 @@ def main() -> int:
     print(f"\nrendered {len(ok)} charts, skipped {len(skipped)}")
     if skipped:
         print("skipped:", ", ".join(f"{f} ({e})" for f, e in skipped))
+    # A run that rendered nothing must fail loudly so visualize.sh / CI can
+    # detect it (unless the user filtered with --only and it simply had gaps).
+    if not ok and not only:
+        return 1
     return 0
 
 
