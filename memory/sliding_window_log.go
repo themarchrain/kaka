@@ -10,6 +10,7 @@ import (
 
 var _ kaka.Limiter = (*SlidingWindow)(nil)
 
+// SlidingWindow is a per-key sliding window log rate limiter.
 type SlidingWindow struct {
 	mu     sync.Mutex
 	limit  int           // 窗口内允许的最大请求数
@@ -22,6 +23,8 @@ type windowState struct {
 	logs []time.Time // 记录请求时间戳的日志切片
 }
 
+// NewSlidingWindow creates a sliding window limiter allowing at most limit requests
+// within the given window. It panics if limit or window is <= 0.
 func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingWindow {
 	if limit <= 0 {
 		panic("memory: sliding window limit must be > 0")

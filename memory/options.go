@@ -5,12 +5,13 @@ import (
 	"time"
 )
 
-// ErrMaxKeysExceeded 达到 maxKeys 上限且请求的是新 key 时返回
+// ErrMaxKeysExceeded is returned when maxKeys is reached and the requested key is new.
 var ErrMaxKeysExceeded = errors.New("memory: max keys exceeded")
 
 // cleanupBatchSize 单次惰性清理最多扫描的 key 数量
 const cleanupBatchSize = 100
 
+// Option configures a limiter at construction time.
 type Option func(*options)
 
 // options 限流器内部通用配置
@@ -52,21 +53,20 @@ func (o *options) validate() {
 	}
 }
 
-// WithMaxKeys 设置最大 key 数量
-// 0 表示不限制（默认）
-// 达到上限后新 key 会返回 error
+// WithMaxKeys sets the maximum number of tracked keys.
+// Zero means unlimited (default). New keys return an error once the limit is reached.
 func WithMaxKeys(n int) Option {
 	return func(o *options) { o.maxKeys = n }
 }
 
-// WithKeyTTL 设置 key 空闲过期时间
-// 0 表示不按空闲时间清理（默认）
+// WithKeyTTL sets how long an idle key is kept before it expires.
+// Zero disables idle-time cleanup (default).
 func WithKeyTTL(d time.Duration) Option {
 	return func(o *options) { o.keyTTL = d }
 }
 
-// WithCleanupInterval 设置惰性清理扫描间隔
-// 0 表示使用默认行为：未设置 keyTTL 时不清理；设置 keyTTL 时默认 1 分钟
+// WithCleanupInterval sets how often lazy cleanup scans for expired keys.
+// Zero uses the default behavior: no cleanup when keyTTL is unset, a 1-minute interval when keyTTL is set.
 func WithCleanupInterval(d time.Duration) Option {
 	return func(o *options) { o.cleanupInterval = d }
 }

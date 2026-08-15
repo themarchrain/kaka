@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ErrInvalidKey 表示限流 key 为空或只包含空白字符。
+// ErrInvalidKey is returned when the rate limit key is empty or blank.
 var ErrInvalidKey = errors.New("memory: invalid key")
 
 func validateKey(key string) error {

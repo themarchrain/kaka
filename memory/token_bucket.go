@@ -10,6 +10,7 @@ import (
 
 var _ kaka.Limiter = (*TokenBucket)(nil)
 
+// TokenBucket is a per-key token bucket rate limiter.
 type TokenBucket struct {
 	mu       sync.Mutex
 	capacity float64 // 桶的容量（最大突发量）
@@ -24,6 +25,9 @@ type bucket struct {
 	lastRefilled time.Time // 上次补充令牌的时间
 }
 
+// NewTokenBucket creates a token bucket limiter with the given capacity and refill
+// rate (tokens per second). It panics if capacity is not finite or < 1, or if rate
+// is not finite or <= 0.
 func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 	if !isFinite(capacity) || capacity < 1 {
 		panic("memory: token bucket capacity must be >= 1")

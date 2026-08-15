@@ -1,17 +1,17 @@
 package memory
 
-// EvictionPolicy 定义 maxKeys 达到上限时对新 key 的处理策略
+// EvictionPolicy defines how new keys are handled when maxKeys is reached.
 type EvictionPolicy int
 
 const (
-	// EvictReject 拒绝新 key，返回 ErrMaxKeysExceeded（默认，与零值一致）
+	// EvictReject rejects new keys with ErrMaxKeysExceeded (default; matches the zero value).
 	EvictReject EvictionPolicy = iota
-	// EvictLRU 淘汰最久未使用的 key，为新 key 腾位
+	// EvictLRU evicts the least recently used key to make room for a new one.
 	EvictLRU
 )
 
-// WithEvictionPolicy 设置 maxKeys 达到上限时的策略
-// 默认 EvictReject：达到上限后新 key 返回 error
+// WithEvictionPolicy sets the policy applied when maxKeys is reached.
+// The default is EvictReject: new keys return an error once the limit is reached.
 func WithEvictionPolicy(p EvictionPolicy) Option {
 	return func(o *options) { o.eviction = p }
 }

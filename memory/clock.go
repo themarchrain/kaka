@@ -2,7 +2,8 @@ package memory
 
 import "time"
 
-// Clock 是可注入的时间源。默认使用 time.Now，测试或差分验证可注入 fake clock。
+// Clock is an injectable time source. It defaults to time.Now; tests and differential
+// verification can inject a fake clock.
 type Clock interface {
 	Now() time.Time
 }
@@ -16,8 +17,8 @@ func (realClock) Now() time.Time {
 	return time.Now()
 }
 
-// WithClock 注入自定义时钟（默认使用真实时间 time.Now）。
-// 供外部包（如 benchmarks 差分验证）注入确定性时间。
+// WithClock injects a custom clock (defaults to real time via time.Now).
+// It lets external packages, such as the benchmark differential tests, inject deterministic time.
 func WithClock(c Clock) Option {
 	return withClock(c)
 }

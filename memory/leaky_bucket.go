@@ -10,6 +10,7 @@ import (
 
 var _ kaka.Limiter = (*LeakyBucket)(nil)
 
+// LeakyBucket is a per-key leaky bucket rate limiter.
 type LeakyBucket struct {
 	mu       sync.Mutex
 	capacity float64 // 桶的容量（最大积压量）
@@ -23,6 +24,9 @@ type leakyState struct {
 	lastLeak time.Time // 上次漏水的时间
 }
 
+// NewLeakyBucket creates a leaky bucket limiter with the given capacity and leak
+// rate (drops per second). It panics if capacity is not finite or < 1, or if rate
+// is not finite or <= 0.
 func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 	if !isFinite(capacity) || capacity < 1 {
 		panic("memory: leaky bucket capacity must be >= 1")
