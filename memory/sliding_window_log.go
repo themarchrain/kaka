@@ -52,6 +52,7 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 	}
 }
 
+// Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
 func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err

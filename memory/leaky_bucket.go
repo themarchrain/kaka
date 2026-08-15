@@ -55,6 +55,7 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 	}
 }
 
+// Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
 func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err

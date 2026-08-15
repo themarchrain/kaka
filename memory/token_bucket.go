@@ -56,6 +56,7 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 	}
 }
 
+// Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err
