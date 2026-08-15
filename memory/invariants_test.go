@@ -101,7 +101,9 @@ func TestLeakyBucket_Invariants(t *testing.T) {
 
 	// L5: 空闲后 water 钳 0（上面第 9 步已覆盖，这里显式复核：放行后 water==1）
 	clock.Advance(time.Hour)
-	lb.Allow(ctx, "user:1")
+	if _, err := lb.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	if s := leakyStateOf(t, lb, "user:1"); s.water != 1 {
 		t.Fatalf("after idle: water=%v want=1", s.water)
 	}

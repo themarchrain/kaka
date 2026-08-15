@@ -47,7 +47,9 @@ func TestLeakyBucket_KeyIsolation(t *testing.T) {
 
 	// 消耗 user:1 的所有容量
 	for i := 0; i < 5; i++ {
-		limiter.Allow(ctx, "user:1")
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("Allow() error = %v", err)
+		}
 	}
 
 	// user:1 应该被限流
@@ -70,7 +72,9 @@ func TestLeakyBucket_Leak(t *testing.T) {
 
 	// 消耗所有容量
 	for i := 0; i < 5; i++ {
-		limiter.Allow(ctx, "user:1")
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("Allow() error = %v", err)
+		}
 	}
 
 	// 推进时间，应该漏掉约2滴水
@@ -164,8 +168,12 @@ func TestLeakyBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 
 	clock.Advance(160 * time.Millisecond)
 
@@ -188,8 +196,12 @@ func TestLeakyBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 
 	clock.Advance(100 * time.Millisecond)
 
@@ -209,14 +221,20 @@ func TestLeakyBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 
 	clock.Advance(100 * time.Millisecond)
-	limiter.Allow(ctx, "user:1")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 
 	clock.Advance(150 * time.Millisecond)
 
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 
 	result, err := limiter.Allow(ctx, "user:1")
 	if err != nil {
@@ -237,8 +255,12 @@ func TestLeakyBucket_Cleanup_IntervalNotReached(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 
 	clock.Advance(100 * time.Millisecond)
 

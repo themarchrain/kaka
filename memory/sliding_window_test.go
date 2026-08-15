@@ -46,7 +46,9 @@ func TestSlidingWindow_KeyIsolation(t *testing.T) {
 
 	// 消耗 user:1 的所有名额
 	for i := 0; i < 3; i++ {
-		limiter.Allow(ctx, "user:1")
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("Allow() error = %v", err)
+		}
 	}
 
 	// user:1 应该被限流
@@ -69,7 +71,9 @@ func TestSlidingWindow_WindowSlide(t *testing.T) {
 
 	// 消耗所有名额
 	for i := 0; i < 3; i++ {
-		limiter.Allow(ctx, "user:1")
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("Allow() error = %v", err)
+		}
 	}
 
 	// 推进窗口滑动
@@ -179,9 +183,14 @@ func TestSlidingWindow_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
 
+		t.Fatalf("Allow() error = %v", err)
+
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	clock.Advance(160 * time.Millisecond)
 
 	result, err := limiter.Allow(ctx, "user:3")
@@ -203,9 +212,14 @@ func TestSlidingWindow_Cleanup_UnexpiredKeyKept(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
 
+		t.Fatalf("Allow() error = %v", err)
+
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	clock.Advance(100 * time.Millisecond)
 
 	_, err := limiter.Allow(ctx, "user:3")
@@ -224,15 +238,22 @@ func TestSlidingWindow_Cleanup_LastSeenRefreshed(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
 
+		t.Fatalf("Allow() error = %v", err)
+
+	}
 	clock.Advance(100 * time.Millisecond)
-	limiter.Allow(ctx, "user:1")
-
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	clock.Advance(150 * time.Millisecond)
 
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
 
+		t.Fatalf("Allow() error = %v", err)
+
+	}
 	result, err := limiter.Allow(ctx, "user:1")
 	if err != nil {
 		t.Fatalf("unexpected error for refreshed key: %v", err)
@@ -252,9 +273,14 @@ func TestSlidingWindow_Cleanup_IntervalNotReached(t *testing.T) {
 		withClock(clock),
 	)
 
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
 
+		t.Fatalf("Allow() error = %v", err)
+
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	clock.Advance(100 * time.Millisecond)
 
 	_, err := limiter.Allow(ctx, "user:3")

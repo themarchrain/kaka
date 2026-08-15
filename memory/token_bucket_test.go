@@ -47,7 +47,9 @@ func TestTokenBucket_KeyIsolation(t *testing.T) {
 
 	// 消耗 user:1 的所有令牌
 	for i := 0; i < 5; i++ {
-		limiter.Allow(ctx, "user:1")
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("Allow() error = %v", err)
+		}
 	}
 
 	// user:1 应该被限流
@@ -70,7 +72,9 @@ func TestTokenBucket_TokenRefill(t *testing.T) {
 
 	// 消耗所有令牌
 	for i := 0; i < 5; i++ {
-		limiter.Allow(ctx, "user:1")
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("Allow() error = %v", err)
+		}
 	}
 
 	// 推进时间，应该补充约2个令牌
@@ -290,9 +294,12 @@ func TestTokenBucket_Cleanup_ExpiredKeyRemoved(t *testing.T) {
 	)
 
 	// 创建两个 key
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
-
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	// 推进到 key 过期 + 超过 cleanupInterval
 	clock.Advance(160 * time.Millisecond)
 
@@ -318,9 +325,12 @@ func TestTokenBucket_Cleanup_UnexpiredKeyKept(t *testing.T) {
 	)
 
 	// 创建两个 key
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
-
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	// 推进超过 cleanupInterval 但未超过 TTL
 	clock.Advance(100 * time.Millisecond)
 
@@ -352,19 +362,22 @@ func TestTokenBucket_Cleanup_LastSeenRefreshed(t *testing.T) {
 	)
 
 	// 创建 key
-	limiter.Allow(ctx, "user:1")
-
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	// 100ms 后访问一次，刷新 lastSeen
 	clock.Advance(100 * time.Millisecond)
-	limiter.Allow(ctx, "user:1")
-
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	// 再等 150ms（距首次 250ms，但距最后访问只有 150ms < TTL=200ms）
 	clock.Advance(150 * time.Millisecond)
 
 	// 创建新 key，触发清理
 	// user:1 不应该被清理，因为 lastSeen 被刷新了
-	limiter.Allow(ctx, "user:2")
-
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	// user:1 应该还能用
 	result, err := limiter.Allow(ctx, "user:1")
 	if err != nil {
@@ -387,9 +400,12 @@ func TestTokenBucket_Cleanup_IntervalNotReached(t *testing.T) {
 	)
 
 	// 创建两个 key
-	limiter.Allow(ctx, "user:1")
-	limiter.Allow(ctx, "user:2")
-
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("Allow() error = %v", err)
+	}
 	// 推进到 key 过期
 	clock.Advance(100 * time.Millisecond)
 
