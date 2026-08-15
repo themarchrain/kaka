@@ -16,9 +16,9 @@ var tokenBucketScript string
 
 var _ kaka.Limiter = (*TokenBucket)(nil)
 
-// TokenBucket 基于 Redis 的分布式令牌桶限流器。
-// 语义与 memory.NewTokenBucket 对齐：初始满桶、按 rate/秒 补充、
-// 拒绝时 RetryAfter = 恢复到 1 个令牌所需时间。
+// TokenBucket is a Redis-backed distributed token bucket limiter.
+// Semantics match memory.NewTokenBucket: the bucket starts full, refills at rate
+// tokens per second, and on denial RetryAfter is the time to refill one token.
 type TokenBucket struct {
 	base     *limiter
 	script   *Script
@@ -26,7 +26,8 @@ type TokenBucket struct {
 	rate     float64
 }
 
-// NewTokenBucket 创建 Redis 令牌桶。capacity >= 1、rate > 0，非法参数 panic。
+// NewTokenBucket creates a Redis token bucket. It panics on invalid arguments:
+// capacity must be >= 1 and rate > 0.
 func NewTokenBucket(client *redis.Client, capacity, rate float64, opts ...Option) *TokenBucket {
 	if !isFinite(capacity) || capacity < 1 {
 		panic("kaka/redis: token bucket capacity must be >= 1")
@@ -42,8 +43,9 @@ func NewTokenBucket(client *redis.Client, capacity, rate float64, opts ...Option
 	}
 }
 
-// Allow 判断 key 是否被允许。底层 Redis 错误按 ErrorPolicy 降级
-// （错误通过 onError 回调上报，不返回 error）；参数校验错误显式返回。
+// Allow reports whether key is permitted. Underlying Redis errors degrade per
+// ErrorPolicy (reported through the onError callback rather than returned);
+// argument validation errors are returned explicitly.
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err

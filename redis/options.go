@@ -2,17 +2,17 @@ package redis
 
 import "time"
 
-// ErrorPolicy 决定底层 Redis 错误时限流器的降级行为。
+// ErrorPolicy decides how the limiter degrades when an underlying Redis call fails.
 type ErrorPolicy int
 
 const (
-	// ErrorFailClosed 限流失败按拒绝处理（默认，安全优先）。
+	// ErrorFailClosed denies the request on failure (default; safety first).
 	ErrorFailClosed ErrorPolicy = iota
-	// ErrorFailOpen 限流失败按放行处理（可用性优先）。
+	// ErrorFailOpen allows the request on failure (availability first).
 	ErrorFailOpen
 )
 
-// Options 保存 redis 限流器的可配置项。
+// Options holds the configurable settings of a Redis limiter.
 type Options struct {
 	keyPrefix string
 	keyTTL    time.Duration
@@ -20,7 +20,7 @@ type Options struct {
 	onError   func(err error)
 }
 
-// Option 是 functional option。
+// Option configures a Redis limiter.
 type Option func(*Options)
 
 func defaultOptions() Options {
@@ -31,22 +31,22 @@ func defaultOptions() Options {
 	}
 }
 
-// WithKeyPrefix 设置 Redis key 前缀（默认 "kaka:"）。
+// WithKeyPrefix sets the Redis key prefix (default "kaka:").
 func WithKeyPrefix(prefix string) Option {
 	return func(o *Options) { o.keyPrefix = prefix }
 }
 
-// WithKeyTTL 设置每个限流 key 的过期时间（默认 30 分钟；<=0 表示不设置 TTL）。
+// WithKeyTTL sets the per-key expiry (default 30 minutes; <= 0 disables the TTL).
 func WithKeyTTL(ttl time.Duration) Option {
 	return func(o *Options) { o.keyTTL = ttl }
 }
 
-// WithErrorPolicy 设置底层错误时的降级行为（默认 ErrorFailClosed）。
+// WithErrorPolicy sets the degradation behavior on underlying errors (default ErrorFailClosed).
 func WithErrorPolicy(policy ErrorPolicy) Option {
 	return func(o *Options) { o.policy = policy }
 }
 
-// WithOnError 注册错误回调（无论何种 policy 都会被调用；nil 函数体安全）。
+// WithOnError registers an error callback, called regardless of the policy (safe with a nil function).
 func WithOnError(fn func(err error)) Option {
 	return func(o *Options) { o.onError = fn }
 }

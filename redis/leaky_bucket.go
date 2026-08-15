@@ -15,9 +15,9 @@ var leakyBucketScript string
 
 var _ kaka.Limiter = (*LeakyBucket)(nil)
 
-// LeakyBucket 基于 Redis 的分布式漏桶限流器。
-// 语义与 memory.NewLeakyBucket 对齐：初始空桶、按 rate/秒 漏水、
-// 满桶溢出拒绝，RetryAfter = 漏掉溢出量所需时间。
+// LeakyBucket is a Redis-backed distributed leaky bucket limiter.
+// Semantics match memory.NewLeakyBucket: the bucket starts empty, leaks at rate
+// drops per second, overflow is denied, and RetryAfter is the time to leak the overflow.
 type LeakyBucket struct {
 	base     *limiter
 	script   *Script
@@ -25,7 +25,8 @@ type LeakyBucket struct {
 	rate     float64
 }
 
-// NewLeakyBucket 创建 Redis 漏桶。capacity >= 1、rate > 0，非法参数 panic。
+// NewLeakyBucket creates a Redis leaky bucket. It panics on invalid arguments:
+// capacity must be >= 1 and rate > 0.
 func NewLeakyBucket(client *redis.Client, capacity, rate float64, opts ...Option) *LeakyBucket {
 	if !isFinite(capacity) || capacity < 1 {
 		panic("kaka/redis: leaky bucket capacity must be >= 1")
@@ -41,8 +42,8 @@ func NewLeakyBucket(client *redis.Client, capacity, rate float64, opts ...Option
 	}
 }
 
-// Allow 判断 key 是否被允许。底层 Redis 错误按 ErrorPolicy 降级；
-// 参数校验错误显式返回。
+// Allow reports whether key is permitted. Underlying Redis errors degrade per
+// ErrorPolicy; argument validation errors are returned explicitly.
 func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err

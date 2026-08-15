@@ -17,9 +17,9 @@ var slidingWindowLogScript string
 
 var _ kaka.Limiter = (*SlidingWindow)(nil)
 
-// SlidingWindow 基于 Redis 的分布式滑动窗口日志限流器。
-// 语义与 memory.NewSlidingWindow 对齐：窗口内最多 limit 次请求，
-// 拒绝时 RetryAfter = 最早请求过期时间。
+// SlidingWindow is a Redis-backed distributed sliding window log limiter.
+// Semantics match memory.NewSlidingWindow: at most limit requests per window,
+// and on denial RetryAfter is when the oldest request expires.
 type SlidingWindow struct {
 	base   *limiter
 	script *Script
@@ -27,7 +27,8 @@ type SlidingWindow struct {
 	window time.Duration
 }
 
-// NewSlidingWindow 创建 Redis 滑动窗口限流器。limit > 0、window > 0，非法参数 panic。
+// NewSlidingWindow creates a Redis sliding window limiter. It panics on invalid
+// arguments: limit and window must be > 0.
 func NewSlidingWindow(client *redis.Client, limit int, window time.Duration, opts ...Option) *SlidingWindow {
 	if limit <= 0 {
 		panic("kaka/redis: sliding window limit must be > 0")
@@ -43,8 +44,8 @@ func NewSlidingWindow(client *redis.Client, limit int, window time.Duration, opt
 	}
 }
 
-// Allow 判断 key 是否被允许。底层 Redis 错误按 ErrorPolicy 降级；
-// 参数校验错误显式返回。
+// Allow reports whether key is permitted. Underlying Redis errors degrade per
+// ErrorPolicy; argument validation errors are returned explicitly.
 func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err

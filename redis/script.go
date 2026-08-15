@@ -9,9 +9,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Script 封装一段 Lua 脚本及其 EVALSHA 缓存。
-// 用法：Load 一次缓存 SHA，之后 Run 走 EVALSHA；NOSCRIPT 自动回退重载。
-// 并发安全：sha 读写由 RWMutex 保护。
+// Script wraps a Lua script and its EVALSHA cache.
+// Usage: call Load once to cache the SHA, then Run executes via EVALSHA; NOSCRIPT
+// errors fall back to reloading automatically.
+// It is safe for concurrent use; the SHA is guarded by an RWMutex.
 type Script struct {
 	mu   sync.RWMutex
 	name string
@@ -19,7 +20,7 @@ type Script struct {
 	sha  string
 }
 
-// NewScript 创建脚本对象。
+// NewScript creates a Script for the given name and Lua body.
 func NewScript(name, body string) *Script {
 	return &Script{name: name, body: body}
 }
@@ -30,7 +31,7 @@ func (s *Script) getSHA() string {
 	return s.sha
 }
 
-// Load 用 SCRIPT LOAD 加载脚本并缓存 SHA。
+// Load runs SCRIPT LOAD and caches the resulting SHA.
 func (s *Script) Load(ctx context.Context, client *redis.Client) error {
 	sha, err := client.ScriptLoad(ctx, s.body).Result()
 	if err != nil {
@@ -42,7 +43,7 @@ func (s *Script) Load(ctx context.Context, client *redis.Client) error {
 	return nil
 }
 
-// Run 执行脚本；sha 未缓存时先 Load，NOSCRIPT 错误时回退重载再执行。
+// Run executes the script, loading it first when the SHA is not cached and reloading on NOSCRIPT errors.
 func (s *Script) Run(ctx context.Context, client *redis.Client, keys []string, args ...interface{}) (interface{}, error) {
 	if s.getSHA() == "" {
 		if err := s.Load(ctx, client); err != nil {

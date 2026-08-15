@@ -7,10 +7,10 @@ import (
 	"github.com/themarchrain/kaka"
 )
 
-// ErrRedisUnavailable 表示底层 Redis 连接/执行失败。
+// ErrRedisUnavailable indicates a failed Redis connection or command execution.
 var ErrRedisUnavailable = fmt.Errorf("kaka/redis: redis unavailable")
 
-// ErrScript 表示 Lua 脚本执行异常。
+// ErrScript indicates an unexpected Lua script execution failure.
 var ErrScript = fmt.Errorf("kaka/redis: script error")
 
 // limiter 是三算法共享的底座：key 前缀、TTL、错误语义。
