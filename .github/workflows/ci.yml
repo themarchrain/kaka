@@ -78,5 +78,7 @@ jobs:
       - name: Fuzz short run
         if: matrix.module == '.'
         run: |
-          go test -run=^$ -fuzz=Fuzz -fuzztime=10s ./memory/
-          go test -run=^$ -fuzz=Fuzz -fuzztime=10s ./middleware/http/
+          go test -run=^$ -fuzz=FuzzRemainingFloor -fuzztime=10s ./memory/
+          go test -run=^$ -fuzz=FuzzDurationFromSecondsCeil -fuzztime=10s ./memory/
+          go test -run=^$ -fuzz=FuzzValidateKey -fuzztime=10s ./memory/
+          go test -run=^$ -fuzz=FuzzRetryAfterSeconds -fuzztime=10s ./middleware/http/
