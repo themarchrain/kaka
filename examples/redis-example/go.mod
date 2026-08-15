@@ -1,6 +1,6 @@
 module github.com/themarchrain/kaka/examples/redis-example
 
-go 1.25.1
+go 1.24
 
 replace github.com/themarchrain/kaka => ../../
 
