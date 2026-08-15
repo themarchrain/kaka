@@ -1,6 +1,7 @@
 # 07. Layered Rate Limiting (Local Pre-check + Redis Authority)
 
-> Measured: Go 1.25.1 · Redis at 127.0.0.1:6379 (local, same endpoint for both sides) · Intel i7-13620H · 2026-08-15
+> Measured: Go 1.25.1 · Redis at 127.0.0.1:6379 (local WSL2 instance,
+> same instance verified by matching run_id) · Intel i7-13620H · 2026-08-15
 > Reproduce: see commands at the bottom
 
 ## Conclusion
@@ -36,6 +37,22 @@
 Allocs on the Redis paths are go-redis internals (encoding/decoding); the
 layered library code adds none on either path.
 
+## End-to-end HTTP (bench-server + hey, 10 s at 64 connections)
+
+Same middleware, same 100/10 token bucket, fixed key `global` — the reject
+flood (rate 10/s against ~140k req/s) is what the local layer absorbs:
+
+| Impl            | QPS      | allowed / denied |
+|-----------------|----------|------------------|
+| Pure Redis      | 25,944   | 199 / 259,310    |
+| Layered         | 140,832  | 168 / 999,832    |
+| Ratio           | **5.4×** | —                |
+
+Even through the HTTP stack the layered limiter holds the ≥ 5× deny-heavy
+target (spec P4). The pure-Redis number is go-redis pool throughput under
+parallel round trips; the layered number is the same middleware with the
+denial flood short-circuited in memory.
+
 ## Acceptance mapping (spec v0.2.0 §9)
 
 | Criterion | Target | Measured | Verdict |
@@ -43,7 +60,7 @@ layered library code adds none on either path.
 | P1 reject path vs pure Redis | ≥ 10× | ~8,200× | PASS |
 | P2 reject path allocations   | 0      | 0        | PASS |
 | P3 allow path overhead       | ≤ +10% | ~0% (0.98×) | PASS |
-| P4 deny-heavy throughput     | ≥ 5×   | ~8,200× | PASS |
+| P4 deny-heavy throughput     | ≥ 5×   | ~8,200× direct, 5.4× over HTTP | PASS |
 
 ## Semantics note
 
@@ -58,9 +75,16 @@ traffic mix.
 ## Reproduce
 
 ```bash
-# any local Redis (here: redis:7-alpine via docker, exposed on 127.0.0.1:6379)
-docker run -d --name kaka-bench-redis -p 6379:6379 redis:7-alpine
+# any local Redis (here: the local WSL2 redis at 127.0.0.1:6379)
 
+# 1. Direct benchmarks (limiter level)
 cd benchmarks
 go test -run='^$' -bench='Layered|RedisTokenBucket|RedisRejectHeavy|KakaTokenBucketRejectPath' -benchmem -count=3 ./compare/
+
+# 2. End-to-end HTTP (middleware level)
+go build -o /tmp/bs.exe ./cmd/bench-server
+REDIS_ADDR=127.0.0.1:6379 /tmp/bs.exe --impl redis --addr :8082 &
+REDIS_ADDR=127.0.0.1:6379 /tmp/bs.exe --impl layered --addr :8083 &
+hey -n 20000 -c 64 -z 10s http://localhost:8082/api/test   # pure redis
+hey -n 20000 -c 64 -z 10s http://localhost:8083/api/test   # layered
 ```
