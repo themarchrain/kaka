@@ -164,5 +164,9 @@ lack the cgo/race toolchain; run `.\scripts\test.ps1 -Race` when supported).
 
 ## Roadmap
 
-Redis-backed limiters, metrics, and management APIs are planned as future
-layers — behind the same `Limiter` / `Result` contract.
+Completed:
+- v0.1.0: Redis-backed limiters (atomic Lua scripts, distributed)
+- v0.1.1: English API documentation
+
+Planned: layered rate limiting (in-memory pre-check + Redis fallback),
+metrics, and management APIs — behind the same `Limiter` / `Result` contract.
