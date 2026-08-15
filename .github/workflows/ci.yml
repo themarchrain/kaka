@@ -62,3 +62,11 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: go test -race -count=1 ./...
+
+      - name: Run golangci-lint
+        if: matrix.module != 'benchmarks'
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          working-directory: ${{ matrix.module }}
+          args: --timeout=5m
