@@ -28,8 +28,10 @@ var _ kaka.Limiter = (*Limiter)(nil)
 //     layer: a request the remote layer would allow may be denied locally,
 //     and RetryAfter from a local denial can overestimate. This is the
 //     intended trade-off for absorbing rejection floods locally.
-//   - A local ErrMaxKeysExceeded (the local key store is full) falls
-//     through to the remote layer instead of being returned.
+//   - Any local-layer error (for example memory.ErrMaxKeysExceeded when the
+//     local key store is full) falls through to the remote layer instead of
+//     being returned: the local layer is an optimization, not a correctness
+//     gate, so a local failure never blocks the authoritative decision.
 //   - A blank key returns ErrInvalidKey without consulting either layer.
 //
 // Limiter is stateless and safe for concurrent use; each layer applies its
@@ -61,9 +63,10 @@ func (l *Limiter) Allow(ctx context.Context, key string) (kaka.Result, error) {
 
 	localResult, err := l.local.Allow(ctx, key)
 	if err != nil {
-		// Local errors (e.g. memory.ErrMaxKeysExceeded) mean the local
-		// layer cannot serve this key; fall through to the authoritative
-		// remote layer instead of surfacing a local-only failure.
+		// The local layer is an optimization, not a correctness gate: any
+		// local failure (e.g. memory.ErrMaxKeysExceeded) falls through to
+		// the authoritative remote layer instead of surfacing a local-only
+		// error.
 		return l.remote.Allow(ctx, key)
 	}
 	if !localResult.Allowed {

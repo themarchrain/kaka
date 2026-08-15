@@ -111,8 +111,9 @@ func TestAllow_LocalDenyShortCircuitsRemote(t *testing.T) {
 
 func TestAllow_BlankKeySkipsBothLayers(t *testing.T) {
 	ctx := context.Background()
+	local := &scriptedLimiter{}
 	remote := &scriptedLimiter{}
-	limiter := New(&scriptedLimiter{}, remote)
+	limiter := New(local, remote)
 
 	for _, key := range []string{"", "   "} {
 		_, err := limiter.Allow(ctx, key)
@@ -120,8 +121,30 @@ func TestAllow_BlankKeySkipsBothLayers(t *testing.T) {
 			t.Fatalf("Allow(%q) err = %v, want ErrInvalidKey", key, err)
 		}
 	}
+	if local.callCount() != 0 {
+		t.Fatalf("expected local not consulted for blank keys, got %d calls", local.callCount())
+	}
 	if remote.callCount() != 0 {
 		t.Fatalf("expected remote not consulted for blank keys, got %d calls", remote.callCount())
+	}
+}
+
+func TestAllow_LocalErrorFallsThroughToRemote(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("boom")
+	local := &scriptedLimiter{err: boom}
+	remote := &scriptedLimiter{result: kaka.Result{Allowed: true, Remaining: 3}}
+	limiter := New(local, remote)
+
+	result, err := limiter.Allow(ctx, "user:1")
+	if err != nil {
+		t.Fatalf("expected local error to fall through, got error: %v", err)
+	}
+	if !result.Allowed || result.Remaining != 3 {
+		t.Fatalf("expected remote result, got %+v", result)
+	}
+	if remote.callCount() != 1 {
+		t.Fatalf("expected remote consulted once, got %d", remote.callCount())
 	}
 }
 
