@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-// Result 请求放行结果
+// Result is the outcome of an Allow call.
 type Result struct {
-	Allowed    bool          // 是否允许放行
-	Remaining  int64         // 剩余的额度
-	RetryAfter time.Duration // 等待重试时间（仅被限流生效）
+	Allowed    bool          // Allowed reports whether the request was permitted.
+	Remaining  int64         // Remaining is the remaining allowance for the key.
+	RetryAfter time.Duration // RetryAfter is how long to wait before retrying; set only when denied.
 }
 
-// Limiter 限流器核心接口
-// 限流器根据唯一 key 识别不同的限流对象
+// Limiter is the core rate limiter interface.
+// Limiters identify distinct rate-limited objects by key.
 type Limiter interface {
 	Allow(ctx context.Context, key string) (Result, error)
 }
