@@ -36,6 +36,7 @@ class TestKindsGlobs(unittest.TestCase):
             "bench-redis": "benchmark-redis-20260815-231522.txt",
             "bench-redis-sweep": "benchmark-redis-sweep-20260815-231522.txt",
             "bench-layered": "benchmark-layered-20260815-231908.txt",
+            "bench-multikey": "benchmark-multikey-20260816-110715.txt",
         }
         for kind, filename in samples.items():
             _make_kind_file(self.raw, KINDS[kind], filename)
@@ -56,6 +57,9 @@ class TestKindsGlobs(unittest.TestCase):
         (self.raw / "loadtest-kaka-many-20260815-231030.csv").write_text("x")
         self.assertIsNone(newest(self.raw, KINDS["loadtest-kaka"]),
                           "loadtest-kaka must not match loadtest-kaka-many")
+        (self.raw / "benchmark-multikey-20260816-110715.txt").write_text("x")
+        self.assertIsNone(newest(self.raw, KINDS["bench"]),
+                          "bench must not match benchmark-multikey")
 
     def test_newest_returns_latest(self):
         import os
@@ -71,7 +75,7 @@ class TestKindsGlobs(unittest.TestCase):
         self.assertEqual(newest(self.raw, KINDS["bench"]).name, b.name)
 
     def test_charts_mapping_is_complete(self):
-        self.assertEqual(len(CHARTS), 13)
+        self.assertEqual(len(CHARTS), 15)
 
 
 if __name__ == "__main__":

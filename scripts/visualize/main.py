@@ -39,6 +39,7 @@ KINDS = {
     "bench-redis": "benchmark-redis-[0-9]*.txt",
     "bench-redis-sweep": "benchmark-redis-sweep-*.txt",
     "bench-layered": "benchmark-layered-*.txt",
+    "bench-multikey": "benchmark-multikey-[0-9]*.txt",
 }
 
 CHARTS = {
@@ -55,6 +56,8 @@ CHARTS = {
     "fig11": ("charts_06", "build_fig11"),
     "fig12": ("charts_07", "build_fig12"),
     "fig13": ("charts_07", "build_fig13"),
+    "fig14": ("charts_08", "build_fig14"),
+    "fig15": ("charts_08", "build_fig15"),
 }
 
 
