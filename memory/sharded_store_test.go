@@ -249,6 +249,11 @@ func TestShardedStore_EvictLRU_EvictsLeastRecentlyUsed(t *testing.T) {
 	if _, ok := store.shards[0].orderItems["a"]; !ok {
 		t.Fatal("expected a to survive")
 	}
+	// Direct concrete call (also marks the method as used for staticcheck,
+	// which does not count interface-only calls on generic receivers).
+	if got := store.drainEvictions(); got != 1 {
+		t.Fatalf("expected 1 drained eviction, got %d", got)
+	}
 }
 
 func TestShardedStore_EvictLRU_RefreshMovesToFront(t *testing.T) {
