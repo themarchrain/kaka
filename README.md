@@ -214,6 +214,7 @@ Completed:
 - v0.2.0: Layered rate limiting (local pre-check + Redis authority)
 - v0.3.0: Benchmark visualization (Python chart pipeline, one-shot regenerate)
 - v0.4.0: Sharded store (striped locks, multi-key concurrency)
+- v0.4.1: Metrics observability (MetricSink, tiered layered reporting)
 
 Planned: metrics and management APIs — behind the same `Limiter` / `Result`
 contract.
