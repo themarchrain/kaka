@@ -35,8 +35,12 @@ func TestFNV1a64_MatchesStdlib(t *testing.T) {
 }
 
 // Determinism: the same input always yields the same output (stateless).
+// Variables instead of a direct comparison so staticcheck does not flag the
+// two calls as identical expressions.
 func TestFNV1a64_Deterministic(t *testing.T) {
-	if fnv1a64("user:42") != fnv1a64("user:42") {
+	first := fnv1a64("user:42")
+	second := fnv1a64("user:42")
+	if first != second {
 		t.Fatal("fnv1a64 must be deterministic")
 	}
 }
