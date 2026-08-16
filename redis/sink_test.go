@@ -41,10 +41,12 @@ func (s *recordingSink) counts() (int, int, int) {
 }
 
 // 需要真实 Redis（与既有契约测试同一约定：REDIS_ADDR 或 127.0.0.1:6379）。
+// 使用 testKeyPrefix 使 key 落在测试清理范围内：每次测试结束清桶，
+// 保证 -count=N 重复运行时从满桶开始（10 allowed / 1 rejected 确定）。
 func TestTokenBucket_WithSink_CountsAllowedRejected(t *testing.T) {
 	client := testClient(t)
 	sink := &recordingSink{}
-	tb := NewTokenBucket(client, 10, 1, WithMetricSink(sink))
+	tb := NewTokenBucket(client, 10, 1, WithKeyPrefix(testKeyPrefix), WithMetricSink(sink))
 	ctx := context.Background()
 	for i := 0; i < 11; i++ {
 		if _, err := tb.Allow(ctx, "sink:key"); err != nil {
