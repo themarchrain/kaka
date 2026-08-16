@@ -92,6 +92,13 @@ policy when strict limit semantics must not be bypassed by eviction.
 
 Existing keys keep working when the cap is reached; only new keys are rejected.
 
+Concurrency: each limiter shards its key store across 64 striped locks
+(`WithShardCount`, a power of two), so concurrent requests on different keys
+do not serialize on a single mutex. `maxKeys` stays exact across shards;
+`EvictLRU` eviction is approximate (each shard evicts from its own LRU list,
+so the evicted key may differ from the globally least-recently-used one,
+while the total key count stays bounded by `maxKeys`).
+
 ## HTTP Middleware
 
 ```go

@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/themarchrain/kaka"
@@ -12,11 +11,11 @@ var _ kaka.Limiter = (*LeakyBucket)(nil)
 
 // LeakyBucket is a per-key leaky bucket rate limiter.
 type LeakyBucket struct {
-	mu       sync.Mutex
 	capacity float64 // 桶的容量（最大积压量）
 	rate     float64 // 漏水速率（滴/秒）
 	opts     options
 	store    stateStore[*leakyState]
+	leak     func(*leakyState, time.Time) (kaka.Result, error) // bound once at construction; runs under the shard lock
 }
 
 type leakyState struct {
@@ -42,17 +41,19 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 	o.applyDefaults()
 	o.validate()
 
-	return &LeakyBucket{
+	lb := &LeakyBucket{
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
 		store: newStateStore[*leakyState](o, func(now time.Time) *leakyState {
-		return &leakyState{
-			water:    0, // 初始空桶
-			lastLeak: now,
-		}
-	}),
+			return &leakyState{
+				water:    0, // 初始空桶
+				lastLeak: now,
+			}
+		}),
 	}
+	lb.leak = lb.leakAndDecide
+	return lb
 }
 
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
@@ -61,15 +62,12 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		return kaka.Result{}, err
 	}
 
-	lb.mu.Lock()
-	defer lb.mu.Unlock()
-
 	now := lb.opts.clock.Now()
-	b, err := lb.store.getOrCreate(key, now)
-	if err != nil {
-		return kaka.Result{}, err
-	}
+	return lb.store.withState(key, now, lb.leak)
+}
 
+// leakAndDecide 在 shard 锁内执行：计算漏水并判定（同 key 并发串行化）。
+func (lb *LeakyBucket) leakAndDecide(b *leakyState, now time.Time) (kaka.Result, error) {
 	// 计算过去这段时间漏掉了多少水
 	elapsed := now.Sub(b.lastLeak).Seconds()
 	leakedWater := elapsed * lb.rate

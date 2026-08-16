@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/themarchrain/kaka"
@@ -12,11 +11,11 @@ var _ kaka.Limiter = (*SlidingWindow)(nil)
 
 // SlidingWindow is a per-key sliding window log rate limiter.
 type SlidingWindow struct {
-	mu     sync.Mutex
 	limit  int           // 窗口内允许的最大请求数
 	window time.Duration // 窗口大小 (如 1 * time.Second)
 	opts   options
 	store  stateStore[*windowState]
+	record func(*windowState, time.Time) (kaka.Result, error) // bound once at construction; runs under the shard lock
 }
 
 type windowState struct {
@@ -40,16 +39,18 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 	o.applyDefaults()
 	o.validate()
 
-	return &SlidingWindow{
+	sw := &SlidingWindow{
 		limit:  limit,
 		window: window,
 		opts:   o,
 		store: newStateStore[*windowState](o, func(now time.Time) *windowState {
-		return &windowState{
-			logs: make([]time.Time, 0),
-		}
-	}),
+			return &windowState{
+				logs: make([]time.Time, 0),
+			}
+		}),
 	}
+	sw.record = sw.recordAndDecide
+	return sw
 }
 
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
@@ -58,15 +59,12 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 		return kaka.Result{}, err
 	}
 
-	sw.mu.Lock()
-	defer sw.mu.Unlock()
-
 	now := sw.opts.clock.Now()
-	state, err := sw.store.getOrCreate(key, now)
-	if err != nil {
-		return kaka.Result{}, err
-	}
+	return sw.store.withState(key, now, sw.record)
+}
 
+// recordAndDecide 在 shard 锁内执行：修剪过期日志、判定并追加（同 key 并发串行化）。
+func (sw *SlidingWindow) recordAndDecide(state *windowState, now time.Time) (kaka.Result, error) {
 	windowStart := now.Add(-sw.window)
 
 	// 查找第一个在窗口内的时间戳索引

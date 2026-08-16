@@ -144,11 +144,11 @@ func TestSlidingWindow_LogCapacityGrowsLazily(t *testing.T) {
 func slidingWindowStateForTest(t *testing.T, limiter *SlidingWindow, key string) *windowState {
 	t.Helper()
 
-	store, ok := limiter.store.(*mapStore[*windowState])
+	store, ok := limiter.store.(*shardedStore[*windowState])
 	if !ok {
-		t.Fatal("expected sliding window to use mapStore in memory tests")
+		t.Fatal("expected sliding window to use shardedStore in memory tests")
 	}
-	entry, ok := store.items[key]
+	entry, ok := store.shardFor(key).items[key]
 	if !ok {
 		t.Fatalf("expected key %q to exist in store", key)
 	}

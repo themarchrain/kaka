@@ -195,9 +195,9 @@ func BenchmarkLeakyBucketAllowParallel(b *testing.B) {
 	})
 }
 
-func BenchmarkMapStoreGetExisting(b *testing.B) {
+func BenchmarkShardedStoreGetExisting(b *testing.B) {
 	now := time.Unix(100, 0)
-	store := newMapStore[*bucket](defaultOptions(), func(now time.Time) *bucket {
+	store := newShardedStoreWithShards[*bucket](defaultOptions(), 1, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	state, err := store.getOrCreate("user:1", now)
@@ -220,9 +220,9 @@ func BenchmarkMapStoreGetExisting(b *testing.B) {
 	}
 }
 
-func BenchmarkMapStoreCreateNewKey(b *testing.B) {
+func BenchmarkShardedStoreCreateNewKey(b *testing.B) {
 	now := time.Unix(100, 0)
-	store := newMapStore[*bucket](defaultOptions(), func(now time.Time) *bucket {
+	store := newShardedStoreWithShards[*bucket](defaultOptions(), 1, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
 
@@ -238,9 +238,9 @@ func BenchmarkMapStoreCreateNewKey(b *testing.B) {
 	}
 }
 
-func BenchmarkMapStoreRejectNewKeyWhenFull(b *testing.B) {
+func BenchmarkShardedStoreRejectNewKeyWhenFull(b *testing.B) {
 	now := time.Unix(100, 0)
-	store := newMapStore[*bucket](options{maxKeys: 1}, func(now time.Time) *bucket {
+	store := newShardedStoreWithShards[*bucket](options{maxKeys: 1}, 1, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
 	})
 	_, err := store.getOrCreate("user:1", now)
@@ -260,19 +260,20 @@ func BenchmarkMapStoreRejectNewKeyWhenFull(b *testing.B) {
 	}
 }
 
-func BenchmarkMapStoreCleanupScan(b *testing.B) {
+func BenchmarkShardedStoreCleanupScan(b *testing.B) {
 	for _, size := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
 			now := time.Unix(100, 0)
-			store := newMapStore[*bucket](options{
+			store := newShardedStoreWithShards[*bucket](options{
 				maxKeys:         size + 1,
 				keyTTL:          time.Hour,
 				cleanupInterval: time.Nanosecond,
-			}, func(now time.Time) *bucket {
+			}, 1, func(now time.Time) *bucket {
 				return &bucket{tokens: 1, lastRefilled: now}
 			})
+			store.live.Store(int64(size))
 			for i := 0; i < size; i++ {
-				store.items[fmt.Sprintf("seed:%d", i)] = &keyEntry[*bucket]{
+				store.shards[0].items[fmt.Sprintf("seed:%d", i)] = &keyEntry[*bucket]{
 					value:    &bucket{tokens: 1, lastRefilled: now},
 					lastSeen: now,
 				}
@@ -282,7 +283,7 @@ func BenchmarkMapStoreCleanupScan(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				store.cleanup(now.Add(time.Duration(i) * time.Nanosecond))
+				store.cleanupMap(store.shards[0], now.Add(time.Duration(i)*time.Nanosecond))
 			}
 		})
 	}

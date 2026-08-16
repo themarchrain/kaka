@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/themarchrain/kaka"
@@ -12,11 +11,11 @@ var _ kaka.Limiter = (*TokenBucket)(nil)
 
 // TokenBucket is a per-key token bucket rate limiter.
 type TokenBucket struct {
-	mu       sync.Mutex
 	capacity float64 // 桶的容量（最大突发量）
 	rate     float64 // 令牌放入速率（个/秒）
 	opts     options
 	store    stateStore[*bucket]
+	refill   func(*bucket, time.Time) (kaka.Result, error) // bound once at construction; runs under the shard lock
 }
 
 // bucket 单个 key 的桶状态
@@ -43,17 +42,19 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 	o.applyDefaults()
 	o.validate()
 
-	return &TokenBucket{
+	tb := &TokenBucket{
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
 		store: newStateStore[*bucket](o, func(now time.Time) *bucket {
-		return &bucket{
-			tokens:       capacity, // 初始默认满桶
-			lastRefilled: now,
-		}
-	}),
+			return &bucket{
+				tokens:       capacity, // 初始默认满桶
+				lastRefilled: now,
+			}
+		}),
 	}
+	tb.refill = tb.refillAndDecide
+	return tb
 }
 
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
@@ -62,15 +63,12 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		return kaka.Result{}, err
 	}
 
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-
 	now := tb.opts.clock.Now()
-	b, err := tb.store.getOrCreate(key, now)
-	if err != nil {
-		return kaka.Result{}, err
-	}
+	return tb.store.withState(key, now, tb.refill)
+}
 
+// refillAndDecide 在 shard 锁内执行：计算补充令牌并判定（同 key 并发串行化）。
+func (tb *TokenBucket) refillAndDecide(b *bucket, now time.Time) (kaka.Result, error) {
 	// 计算距离上次请求过去了多久，并计算这段时间应该生成多少新令牌
 	elapsed := now.Sub(b.lastRefilled).Seconds()
 	b.tokens += elapsed * tb.rate

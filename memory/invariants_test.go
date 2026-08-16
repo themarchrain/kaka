@@ -12,11 +12,12 @@ import (
 // leakyStateOf 通过类型断言访问内部 state（同包测试）。
 func leakyStateOf(t *testing.T, lb *LeakyBucket, key string) *leakyState {
 	t.Helper()
-	ms, ok := lb.store.(*mapStore[*leakyState])
+	ss, ok := lb.store.(*shardedStore[*leakyState])
 	if !ok {
 		t.Fatal("unexpected store type")
 	}
-	e, ok := ms.items[key]
+	sh := ss.shardFor(key)
+	e, ok := sh.items[key]
 	if !ok {
 		t.Fatalf("key %q not found", key)
 	}
@@ -25,11 +26,12 @@ func leakyStateOf(t *testing.T, lb *LeakyBucket, key string) *leakyState {
 
 func windowStateOf(t *testing.T, sw *SlidingWindow, key string) *windowState {
 	t.Helper()
-	ms, ok := sw.store.(*mapStore[*windowState])
+	ss, ok := sw.store.(*shardedStore[*windowState])
 	if !ok {
 		t.Fatal("unexpected store type")
 	}
-	e, ok := ms.items[key]
+	sh := ss.shardFor(key)
+	e, ok := sh.items[key]
 	if !ok {
 		t.Fatalf("key %q not found", key)
 	}

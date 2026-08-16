@@ -475,3 +475,70 @@ func TestLimiters_InvalidKeyDoesNotConsumeMaxKeysCapacity(t *testing.T) {
 		})
 	}
 }
+
+// TestLimiters_ConcurrentSameKey_ExactlyLimitAllowed pins the same-key
+// concurrency contract: a burst on one key must allow exactly `limit` requests.
+// Regression: when the per-limiter mutex was removed, the per-key state
+// mutation ran outside the shard lock, so concurrent read-modify-write on the
+// same state over-admitted (observed up to 2.8x the limit).
+func TestLimiters_ConcurrentSameKey_ExactlyLimitAllowed(t *testing.T) {
+	cases := []struct {
+		name       string
+		newLimiter func() kaka.Limiter
+	}{
+		{
+			name: "token bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewTokenBucket(10, 1)
+			},
+		},
+		{
+			name: "leaky bucket",
+			newLimiter: func() kaka.Limiter {
+				return NewLeakyBucket(10, 1)
+			},
+		},
+		{
+			name: "sliding window",
+			newLimiter: func() kaka.Limiter {
+				return NewSlidingWindow(10, time.Hour)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const workers = 64
+			const rounds = 100
+			limiter := tc.newLimiter()
+			ctx := context.Background()
+
+			// A fresh key per round keeps rounds independent (a sliding-window
+			// log is cumulative within its window).
+			for round := 0; round < rounds; round++ {
+				results := make(chan kaka.Result, workers)
+				var wg sync.WaitGroup
+				for i := 0; i < workers; i++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						res, _ := limiter.Allow(ctx, "user:same-"+strconv.Itoa(round))
+						results <- res
+					}()
+				}
+				wg.Wait()
+				close(results)
+
+				allowed := 0
+				for res := range results {
+					if res.Allowed {
+						allowed++
+					}
+				}
+				if allowed != 10 {
+					t.Fatalf("round %d: expected exactly 10 allowed, got %d", round, allowed)
+				}
+			}
+		})
+	}
+}
