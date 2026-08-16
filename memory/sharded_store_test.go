@@ -16,7 +16,7 @@ func newTestStore(opts options, shards int, created *int) *shardedStore[*bucket]
 			*created++
 		}
 		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	}, nil)
 }
 
 func TestShardedStore_GetOrCreate_HitDoesNotCallCreate(t *testing.T) {

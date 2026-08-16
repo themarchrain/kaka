@@ -47,6 +47,10 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 			return &windowState{
 				logs: make([]time.Time, 0),
 			}
+		}, func() {
+			if o.sink != nil {
+				o.sink.OnEvict(kaka.TierSingle)
+			}
 		}),
 	}
 	sw.record = sw.recordAndDecide
@@ -56,11 +60,26 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
 func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
+		if sw.opts.sink != nil {
+			sw.opts.sink.OnError(kaka.TierSingle, err)
+		}
 		return kaka.Result{}, err
 	}
 
 	now := sw.opts.clock.Now()
-	return sw.store.withState(key, now, sw.record)
+	result, err := sw.store.withState(key, now, sw.record)
+	if sw.opts.sink != nil {
+		if err != nil {
+			sw.opts.sink.OnError(kaka.TierSingle, err)
+		} else if result.Allowed {
+			sw.opts.sink.OnAllowed(kaka.TierSingle, result)
+		} else {
+			sw.opts.sink.OnRejected(kaka.TierSingle, result)
+		}
+		sw.opts.sink.SetKeys(kaka.TierSingle, sw.store.len())
+		sw.store.drainEvictions()
+	}
+	return result, err
 }
 
 // recordAndDecide 在 shard 锁内执行：修剪过期日志、判定并追加（同 key 并发串行化）。

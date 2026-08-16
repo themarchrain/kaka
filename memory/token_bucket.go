@@ -51,6 +51,10 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 				tokens:       capacity, // 初始默认满桶
 				lastRefilled: now,
 			}
+		}, func() {
+			if o.sink != nil {
+				o.sink.OnEvict(kaka.TierSingle)
+			}
 		}),
 	}
 	tb.refill = tb.refillAndDecide
@@ -60,11 +64,26 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
+		if tb.opts.sink != nil {
+			tb.opts.sink.OnError(kaka.TierSingle, err)
+		}
 		return kaka.Result{}, err
 	}
 
 	now := tb.opts.clock.Now()
-	return tb.store.withState(key, now, tb.refill)
+	result, err := tb.store.withState(key, now, tb.refill)
+	if tb.opts.sink != nil {
+		if err != nil {
+			tb.opts.sink.OnError(kaka.TierSingle, err)
+		} else if result.Allowed {
+			tb.opts.sink.OnAllowed(kaka.TierSingle, result)
+		} else {
+			tb.opts.sink.OnRejected(kaka.TierSingle, result)
+		}
+		tb.opts.sink.SetKeys(kaka.TierSingle, tb.store.len())
+		tb.store.drainEvictions()
+	}
+	return result, err
 }
 
 // refillAndDecide 在 shard 锁内执行：计算补充令牌并判定（同 key 并发串行化）。

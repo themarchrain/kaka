@@ -15,6 +15,9 @@ type stateStore[T any] interface {
 	// withState runs fn with the key's state under the store's lock, so the
 	// per-key mutation (refill math, log append) is serialized per key.
 	withState(key string, now time.Time, fn func(T, time.Time) (kaka.Result, error)) (kaka.Result, error)
+	// drainEvictions reports pending LRU evictions and fires the sink
+	// callback for each; must be called outside any shard lock.
+	drainEvictions() int
 	len() int
 }
 
@@ -26,10 +29,10 @@ type keyEntry[T any] struct {
 
 // newStateStore builds the sharded store (the eviction policy decides
 // whether each shard keeps an LRU list).
-func newStateStore[T any](opts options, create func(time.Time) T) stateStore[T] {
+func newStateStore[T any](opts options, create func(time.Time) T, onEvict func()) stateStore[T] {
 	switch opts.eviction {
 	case EvictReject, EvictLRU:
-		return newShardedStore[T](opts, create)
+		return newShardedStore[T](opts, create, onEvict)
 	default:
 		panic("memory: invalid eviction policy")
 	}

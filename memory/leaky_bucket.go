@@ -50,6 +50,10 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 				water:    0, // 初始空桶
 				lastLeak: now,
 			}
+		}, func() {
+			if o.sink != nil {
+				o.sink.OnEvict(kaka.TierSingle)
+			}
 		}),
 	}
 	lb.leak = lb.leakAndDecide
@@ -59,11 +63,26 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
 func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
+		if lb.opts.sink != nil {
+			lb.opts.sink.OnError(kaka.TierSingle, err)
+		}
 		return kaka.Result{}, err
 	}
 
 	now := lb.opts.clock.Now()
-	return lb.store.withState(key, now, lb.leak)
+	result, err := lb.store.withState(key, now, lb.leak)
+	if lb.opts.sink != nil {
+		if err != nil {
+			lb.opts.sink.OnError(kaka.TierSingle, err)
+		} else if result.Allowed {
+			lb.opts.sink.OnAllowed(kaka.TierSingle, result)
+		} else {
+			lb.opts.sink.OnRejected(kaka.TierSingle, result)
+		}
+		lb.opts.sink.SetKeys(kaka.TierSingle, lb.store.len())
+		lb.store.drainEvictions()
+	}
+	return result, err
 }
 
 // leakAndDecide 在 shard 锁内执行：计算漏水并判定（同 key 并发串行化）。

@@ -13,6 +13,12 @@ import (
 // Usage: call Load once to cache the SHA, then Run executes via EVALSHA; NOSCRIPT
 // errors fall back to reloading automatically.
 // It is safe for concurrent use; the SHA is guarded by an RWMutex.
+// scriptRunner is the minimal script-execution surface used by the limiters.
+// It is an interface so tests can stub script outcomes (parse-error paths).
+type scriptRunner interface {
+	Run(ctx context.Context, client *redis.Client, keys []string, args ...interface{}) (interface{}, error)
+}
+
 type Script struct {
 	mu   sync.RWMutex
 	name string

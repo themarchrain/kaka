@@ -38,6 +38,8 @@ type shardedStore[T any] struct {
 	create    func(time.Time) T
 	sweepMu   sync.Mutex // guards lastSweep; acquired before any shard lock
 	lastSweep time.Time  // global rate limit for sweepExpired
+	evicts    atomic.Int64 // pending evictions, drained outside shard locks
+	onEvict   func()       // optional; fired per drained eviction, never under a shard lock
 }
 
 const (
@@ -45,11 +47,11 @@ const (
 	maxShardCount     = 1024
 )
 
-func newShardedStore[T any](opts options, create func(time.Time) T) *shardedStore[T] {
-	return newShardedStoreWithShards[T](opts, opts.shards, create)
+func newShardedStore[T any](opts options, create func(time.Time) T, onEvict func()) *shardedStore[T] {
+	return newShardedStoreWithShards[T](opts, opts.shards, create, onEvict)
 }
 
-func newShardedStoreWithShards[T any](opts options, shardCount int, create func(time.Time) T) *shardedStore[T] {
+func newShardedStoreWithShards[T any](opts options, shardCount int, create func(time.Time) T, onEvict func()) *shardedStore[T] {
 	shards := make([]*shard[T], shardCount)
 	for i := range shards {
 		s := &shard[T]{}
@@ -61,7 +63,7 @@ func newShardedStoreWithShards[T any](opts options, shardCount int, create func(
 		}
 		shards[i] = s
 	}
-	return &shardedStore[T]{shards: shards, opts: opts, create: create}
+	return &shardedStore[T]{shards: shards, opts: opts, create: create, onEvict: onEvict}
 }
 
 func (s *shardedStore[T]) shardFor(key string) *shard[T] {
@@ -277,6 +279,7 @@ func (s *shardedStore[T]) evictFrom(sh *shard[T]) bool {
 	delete(sh.orderItems, entry.key)
 	sh.order.Remove(elem)
 	s.live.Add(-1)
+	s.evicts.Add(1)
 	return true
 }
 
@@ -343,4 +346,16 @@ func (s *shardedStore[T]) cleanupLRU(sh *shard[T], now time.Time) {
 
 func (s *shardedStore[T]) len() int {
 	return int(s.live.Load())
+}
+
+// drainEvictions returns the pending eviction count and fires onEvict once
+// per eviction. The caller must not hold any shard lock: sink callbacks run
+// here, and a callback that re-enters the limiter must be able to acquire
+// the shard locks.
+func (s *shardedStore[T]) drainEvictions() int {
+	n := int(s.evicts.Swap(0))
+	for i := 0; i < n && s.onEvict != nil; i++ {
+		s.onEvict()
+	}
+	return n
 }

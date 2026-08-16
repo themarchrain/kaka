@@ -50,3 +50,22 @@ func (l *limiter) fallback(err error) kaka.Result {
 		return kaka.Result{Allowed: false}
 	}
 }
+
+// emit 上报决策结果（sink 未配置则忽略）。
+func (l *limiter) emit(result kaka.Result) {
+	if l.opts.sink == nil {
+		return
+	}
+	if result.Allowed {
+		l.opts.sink.OnAllowed(kaka.TierSingle, result)
+	} else {
+		l.opts.sink.OnRejected(kaka.TierSingle, result)
+	}
+}
+
+// emitError 上报错误（sink 未配置则忽略）。
+func (l *limiter) emitError(err error) {
+	if l.opts.sink != nil {
+		l.opts.sink.OnError(kaka.TierSingle, err)
+	}
+}

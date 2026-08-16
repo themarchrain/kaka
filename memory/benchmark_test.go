@@ -199,7 +199,7 @@ func BenchmarkShardedStoreGetExisting(b *testing.B) {
 	now := time.Unix(100, 0)
 	store := newShardedStoreWithShards[*bucket](defaultOptions(), 1, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	}, nil)
 	state, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		b.Fatal(err)
@@ -224,7 +224,7 @@ func BenchmarkShardedStoreCreateNewKey(b *testing.B) {
 	now := time.Unix(100, 0)
 	store := newShardedStoreWithShards[*bucket](defaultOptions(), 1, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	}, nil)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -242,7 +242,7 @@ func BenchmarkShardedStoreRejectNewKeyWhenFull(b *testing.B) {
 	now := time.Unix(100, 0)
 	store := newShardedStoreWithShards[*bucket](options{maxKeys: 1}, 1, func(now time.Time) *bucket {
 		return &bucket{tokens: 1, lastRefilled: now}
-	})
+	}, nil)
 	_, err := store.getOrCreate("user:1", now)
 	if err != nil {
 		b.Fatal(err)
@@ -270,7 +270,7 @@ func BenchmarkShardedStoreCleanupScan(b *testing.B) {
 				cleanupInterval: time.Nanosecond,
 			}, 1, func(now time.Time) *bucket {
 				return &bucket{tokens: 1, lastRefilled: now}
-			})
+			}, nil)
 			store.live.Store(int64(size))
 			for i := 0; i < size; i++ {
 				store.shards[0].items[fmt.Sprintf("seed:%d", i)] = &keyEntry[*bucket]{
