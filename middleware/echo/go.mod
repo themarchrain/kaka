@@ -3,7 +3,11 @@ module github.com/themarchrain/kaka/middleware/echo
 go 1.25.1
 
 require (
-	github.com/labstack/echo/v4 v4.15.4 // indirect
+	github.com/labstack/echo/v4 v4.15.4
+	github.com/themarchrain/kaka v0.0.0-00010101000000-000000000000
+)
+
+require (
 	github.com/labstack/gommon v0.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
