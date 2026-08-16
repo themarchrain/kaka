@@ -1,11 +1,18 @@
 package memory
 
-import "time"
+import (
+	"time"
+
+	"github.com/themarchrain/kaka"
+)
 
 // stateStore is the per-key state storage interface used by the limiters.
 // Implementations must be safe for concurrent use.
 type stateStore[T any] interface {
 	getOrCreate(key string, now time.Time) (T, error)
+	// withState runs fn with the key's state under the store's lock, so the
+	// per-key mutation (refill math, log append) is serialized per key.
+	withState(key string, now time.Time, fn func(T, time.Time) (kaka.Result, error)) (kaka.Result, error)
 	len() int
 }
 

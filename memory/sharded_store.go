@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/themarchrain/kaka"
 )
 
 // shard is one stripe of the sharded store: its own mutex plus its own
@@ -66,28 +68,54 @@ func (s *shardedStore[T]) shardFor(key string) *shard[T] {
 	return s.shards[fnv1a64(key)&uint64(len(s.shards)-1)]
 }
 
-func (s *shardedStore[T]) getOrCreate(key string, now time.Time) (T, error) {
+// withState runs fn with the key's state while holding the shard lock, so
+// the per-key mutation (refill math, log append) is serialized with other
+// requests on the same key. Returns ErrMaxKeysExceeded without calling fn
+// when the key is new and the store is full.
+func (s *shardedStore[T]) withState(key string, now time.Time, fn func(T, time.Time) (kaka.Result, error)) (kaka.Result, error) {
 	sh := s.shardFor(key)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 
+	var v T
+	var ok bool
 	if s.opts.eviction == EvictLRU {
-		return s.getOrCreateLRU(sh, key, now)
+		v, ok = s.getOrCreateLRU(sh, key, now)
+	} else {
+		v, ok = s.getOrCreateMap(sh, key, now)
 	}
-	return s.getOrCreateMap(sh, key, now)
+	if !ok {
+		return kaka.Result{}, ErrMaxKeysExceeded
+	}
+	return fn(v, now)
 }
 
-func (s *shardedStore[T]) getOrCreateMap(sh *shard[T], key string, now time.Time) (T, error) {
+// getOrCreate returns the key's state, creating it if absent. It is a thin
+// wrapper over withState for tests and direct store users; limiters use
+// withState directly so their mutation runs under the lock.
+func (s *shardedStore[T]) getOrCreate(key string, now time.Time) (T, error) {
+	var out T
+	_, err := s.withState(key, now, func(v T, _ time.Time) (kaka.Result, error) {
+		out = v
+		return kaka.Result{}, nil
+	})
+	return out, err
+}
+
+// getOrCreateMap returns the key's state in an EvictReject shard, creating it
+// if absent; ok=false means ErrMaxKeysExceeded. The caller holds sh.mu and
+// must re-check the key after any path that temporarily releases the lock.
+func (s *shardedStore[T]) getOrCreateMap(sh *shard[T], key string, now time.Time) (T, bool) {
 	if entry, ok := sh.items[key]; ok {
 		entry.lastSeen = now
 		s.cleanupMap(sh, now)
-		return entry.value, nil
+		return entry.value, true
 	}
 
 	s.cleanupMap(sh, now)
 	if !s.reserveSlot(sh, now) {
 		var zero T
-		return zero, ErrMaxKeysExceeded
+		return zero, false
 	}
 
 	// reserveSlot may temporarily release this shard's lock on the
@@ -97,27 +125,31 @@ func (s *shardedStore[T]) getOrCreateMap(sh *shard[T], key string, now time.Time
 	if entry, ok := sh.items[key]; ok {
 		s.live.Add(-1)
 		entry.lastSeen = now
-		return entry.value, nil
+		return entry.value, true
 	}
 
 	value := s.create(now)
 	sh.items[key] = &keyEntry[T]{value: value, lastSeen: now}
-	return value, nil
+	return value, true
 }
 
-func (s *shardedStore[T]) getOrCreateLRU(sh *shard[T], key string, now time.Time) (T, error) {
+// getOrCreateLRU returns the key's state in an EvictLRU shard, creating it if
+// absent; ok=false means the store could not make room (defensive; LRU never
+// rejects). The caller holds sh.mu and must re-check the key after any path
+// that temporarily releases the lock.
+func (s *shardedStore[T]) getOrCreateLRU(sh *shard[T], key string, now time.Time) (T, bool) {
 	if elem, ok := sh.orderItems[key]; ok {
 		entry := elem.Value.(*lruEntry[T])
 		entry.lastSeen = now
 		sh.order.MoveToFront(elem)
 		s.cleanupLRU(sh, now)
-		return entry.value, nil
+		return entry.value, true
 	}
 
 	s.cleanupLRU(sh, now)
 	if !s.reserveSlot(sh, now) {
 		var zero T
-		return zero, ErrMaxKeysExceeded
+		return zero, false
 	}
 
 	if elem, ok := sh.orderItems[key]; ok {
@@ -125,13 +157,13 @@ func (s *shardedStore[T]) getOrCreateLRU(sh *shard[T], key string, now time.Time
 		entry := elem.Value.(*lruEntry[T])
 		entry.lastSeen = now
 		sh.order.MoveToFront(elem)
-		return entry.value, nil
+		return entry.value, true
 	}
 
 	value := s.create(now)
 	elem := sh.order.PushFront(&lruEntry[T]{key: key, value: value, lastSeen: now})
 	sh.orderItems[key] = elem
-	return value, nil
+	return value, true
 }
 
 // reserveSlot reserves a maxKeys slot for a new key (CAS loop, exact

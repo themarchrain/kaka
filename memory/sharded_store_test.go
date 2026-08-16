@@ -387,7 +387,9 @@ func TestShardedStore_FullWithExpiredKeysInOtherShards_AllowsNewKey(t *testing.T
 	}
 }
 
-// ---- differential: identical behavior with 1 vs 64 shards ----// Under the same single-threaded key sequence, 1-shard and 64-shard stores
+// ---- differential: identical behavior with 1 vs 64 shards ----
+
+// Under the same single-threaded key sequence, 1-shard and 64-shard stores
 // must agree on success/error outcomes (maxKeys bound and hit semantics;
 // NOT which key is evicted - approximate LRU allows shard-level differences).
 func TestShardedStore_Differential_OneVsManyShards(t *testing.T) {

@@ -15,6 +15,7 @@ type LeakyBucket struct {
 	rate     float64 // 漏水速率（滴/秒）
 	opts     options
 	store    stateStore[*leakyState]
+	leak     func(*leakyState, time.Time) (kaka.Result, error) // bound once at construction; runs under the shard lock
 }
 
 type leakyState struct {
@@ -40,7 +41,7 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 	o.applyDefaults()
 	o.validate()
 
-	return &LeakyBucket{
+	lb := &LeakyBucket{
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
@@ -51,6 +52,8 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 			}
 		}),
 	}
+	lb.leak = lb.leakAndDecide
+	return lb
 }
 
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
@@ -60,11 +63,11 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	}
 
 	now := lb.opts.clock.Now()
-	b, err := lb.store.getOrCreate(key, now)
-	if err != nil {
-		return kaka.Result{}, err
-	}
+	return lb.store.withState(key, now, lb.leak)
+}
 
+// leakAndDecide 在 shard 锁内执行：计算漏水并判定（同 key 并发串行化）。
+func (lb *LeakyBucket) leakAndDecide(b *leakyState, now time.Time) (kaka.Result, error) {
 	// 计算过去这段时间漏掉了多少水
 	elapsed := now.Sub(b.lastLeak).Seconds()
 	leakedWater := elapsed * lb.rate

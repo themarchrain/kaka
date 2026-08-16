@@ -15,6 +15,7 @@ type TokenBucket struct {
 	rate     float64 // 令牌放入速率（个/秒）
 	opts     options
 	store    stateStore[*bucket]
+	refill   func(*bucket, time.Time) (kaka.Result, error) // bound once at construction; runs under the shard lock
 }
 
 // bucket 单个 key 的桶状态
@@ -41,7 +42,7 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 	o.applyDefaults()
 	o.validate()
 
-	return &TokenBucket{
+	tb := &TokenBucket{
 		capacity: capacity,
 		rate:     rate,
 		opts:     o,
@@ -52,6 +53,8 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 			}
 		}),
 	}
+	tb.refill = tb.refillAndDecide
+	return tb
 }
 
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the key is empty or blank.
@@ -61,11 +64,11 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	}
 
 	now := tb.opts.clock.Now()
-	b, err := tb.store.getOrCreate(key, now)
-	if err != nil {
-		return kaka.Result{}, err
-	}
+	return tb.store.withState(key, now, tb.refill)
+}
 
+// refillAndDecide 在 shard 锁内执行：计算补充令牌并判定（同 key 并发串行化）。
+func (tb *TokenBucket) refillAndDecide(b *bucket, now time.Time) (kaka.Result, error) {
 	// 计算距离上次请求过去了多久，并计算这段时间应该生成多少新令牌
 	elapsed := now.Sub(b.lastRefilled).Seconds()
 	b.tokens += elapsed * tb.rate
