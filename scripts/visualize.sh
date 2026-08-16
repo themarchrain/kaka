@@ -17,7 +17,14 @@ charts_dir="$root/docs/benchmarks/charts"
 mkdir -p "$raw_dir" "$charts_dir"
 
 full=0
-[ "${1:-}" = "--full" ] && full=1
+extra_args=""
+for a in "$@"; do
+    if [ "$a" = "--full" ]; then
+        full=1
+    else
+        extra_args="$extra_args $a"
+    fi
+done
 
 # kind -> (glob pattern, script that produces it)
 need_run() {  # $1 = glob pattern, $2 = script
@@ -43,6 +50,7 @@ need_run 'benchmark-redis-sweep-*.txt' bench-redis.sh
 need_run 'benchmark-layered-*.txt'    bench-layered.sh
 need_run 'loadtest-redis-*.csv'       bench-layered.sh
 need_run 'loadtest-layered-*.csv'     bench-layered.sh
+need_run 'benchmark-multikey-[0-9]*.txt' bench-multikey.sh
 
 if [ "$full" = "1" ]; then
     echo "==> --full: rerunning long-term stability (600s)"
@@ -94,4 +102,5 @@ if [ -z "$PY" ]; then
 fi
 
 echo "==> rendering charts"
-"$PY" "$root/scripts/visualize/main.py" --raw-dir "$raw_dir" --charts-dir "$charts_dir"
+# shellcheck disable=SC2086 - extra_args is a space-separated flag list (e.g. --only fig14,fig15)
+"$PY" "$root/scripts/visualize/main.py" --raw-dir "$raw_dir" --charts-dir "$charts_dir" $extra_args
