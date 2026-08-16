@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/themarchrain/kaka"
@@ -12,7 +11,6 @@ var _ kaka.Limiter = (*LeakyBucket)(nil)
 
 // LeakyBucket is a per-key leaky bucket rate limiter.
 type LeakyBucket struct {
-	mu       sync.Mutex
 	capacity float64 // 桶的容量（最大积压量）
 	rate     float64 // 漏水速率（滴/秒）
 	opts     options
@@ -47,11 +45,11 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 		rate:     rate,
 		opts:     o,
 		store: newStateStore[*leakyState](o, func(now time.Time) *leakyState {
-		return &leakyState{
-			water:    0, // 初始空桶
-			lastLeak: now,
-		}
-	}),
+			return &leakyState{
+				water:    0, // 初始空桶
+				lastLeak: now,
+			}
+		}),
 	}
 }
 
@@ -60,9 +58,6 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err
 	}
-
-	lb.mu.Lock()
-	defer lb.mu.Unlock()
 
 	now := lb.opts.clock.Now()
 	b, err := lb.store.getOrCreate(key, now)

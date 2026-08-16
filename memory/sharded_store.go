@@ -19,14 +19,23 @@ type shard[T any] struct {
 	lastCleanup time.Time
 }
 
+// lruEntry is the value stored in an EvictLRU shard's order list.
+type lruEntry[T any] struct {
+	key      string
+	value    T
+	lastSeen time.Time
+}
+
 // shardedStore is a stateStore implementation sharded by key hash.
 // Concurrency safety comes from the per-shard mutexes; the live atomic
 // counter keeps maxKeys exact across shards.
 type shardedStore[T any] struct {
-	shards []*shard[T]
-	opts   options
-	live   atomic.Int64
-	create func(time.Time) T
+	shards    []*shard[T]
+	opts      options
+	live      atomic.Int64
+	create    func(time.Time) T
+	sweepMu   sync.Mutex // guards lastSweep; acquired before any shard lock
+	lastSweep time.Time  // global rate limit for sweepExpired
 }
 
 const (
@@ -76,7 +85,7 @@ func (s *shardedStore[T]) getOrCreateMap(sh *shard[T], key string, now time.Time
 	}
 
 	s.cleanupMap(sh, now)
-	if !s.reserveSlot(sh) {
+	if !s.reserveSlot(sh, now) {
 		var zero T
 		return zero, ErrMaxKeysExceeded
 	}
@@ -106,7 +115,7 @@ func (s *shardedStore[T]) getOrCreateLRU(sh *shard[T], key string, now time.Time
 	}
 
 	s.cleanupLRU(sh, now)
-	if !s.reserveSlot(sh) {
+	if !s.reserveSlot(sh, now) {
 		var zero T
 		return zero, ErrMaxKeysExceeded
 	}
@@ -126,18 +135,22 @@ func (s *shardedStore[T]) getOrCreateLRU(sh *shard[T], key string, now time.Time
 }
 
 // reserveSlot reserves a maxKeys slot for a new key (CAS loop, exact
-// globally). The caller holds sh.mu; under EvictLRU a full store first
-// evicts locally, and when the local shard is empty it temporarily releases
-// the lock to evict from another shard (the caller re-holds the lock on
-// return), then retries the CAS.
+// globally). The caller holds sh.mu and must re-check the key after any
+// path that temporarily releases the lock (see getOrCreateMap/LRU).
+//
+// When the store is full it first runs a global expired-key sweep (releasing
+// sh.mu first: cross-shard locking while holding a shard lock could deadlock),
+// then retries. EvictReject denies when still full; EvictLRU evicts locally
+// (or from another shard when this shard is empty) so it never rejects.
 //
 // maxKeys=0 (unlimited) still counts via live.Add so len() reflects the
 // real key count; counting only happens on the new-key path, never on hits.
-func (s *shardedStore[T]) reserveSlot(sh *shard[T]) bool {
+func (s *shardedStore[T]) reserveSlot(sh *shard[T], now time.Time) bool {
 	if s.opts.maxKeys <= 0 {
 		s.live.Add(1)
 		return true
 	}
+	swept := false
 	for {
 		n := s.live.Load()
 		if n < int64(s.opts.maxKeys) {
@@ -146,18 +159,61 @@ func (s *shardedStore[T]) reserveSlot(sh *shard[T]) bool {
 			}
 			continue
 		}
-		// Full: EvictReject denies; EvictLRU evicts one and retries.
-		if s.opts.eviction != EvictLRU {
-			return false
+		// Full.
+		if s.opts.eviction == EvictLRU {
+			if s.evictFrom(sh) { // local eviction, we hold the lock
+				continue
+			}
+			// Local shard empty: release the lock, sweep expired keys
+			// globally, then evict from another shard if still full.
+			// Single lock held at any time, no nesting, no deadlock.
+			sh.mu.Unlock()
+			if !swept {
+				swept = true
+				s.sweepExpired(now)
+			}
+			if s.live.Load() >= int64(s.opts.maxKeys) {
+				s.evictAnyOther(sh)
+			}
+			sh.mu.Lock()
+			continue
 		}
-		if s.evictFrom(sh) {
-			continue // local eviction freed one slot
+		// EvictReject: sweep expired keys once (the expired keys may live in
+		// other shards; the old single-store cleanup ran before the maxKeys
+		// check, and the sweep preserves that contract), then re-check.
+		if !swept {
+			swept = true
+			sh.mu.Unlock()
+			s.sweepExpired(now)
+			sh.mu.Lock()
+			continue
 		}
-		// Local shard empty: release the local lock, evict from another
-		// shard one at a time (single lock held, no nesting, no deadlock).
-		sh.mu.Unlock()
-		s.evictAnyOther(sh)
+		return false
+	}
+}
+
+// sweepExpired scans every shard and removes expired keys (one shard lock at
+// a time). It is rate-limited by a global lastSweep + cleanupInterval so the
+// full path stays O(1) between sweeps. The caller must not hold any shard lock.
+func (s *shardedStore[T]) sweepExpired(now time.Time) {
+	if s.opts.keyTTL <= 0 || s.opts.cleanupInterval <= 0 {
+		return
+	}
+	s.sweepMu.Lock()
+	defer s.sweepMu.Unlock()
+	if now.Sub(s.lastSweep) < s.opts.cleanupInterval {
+		return
+	}
+	s.lastSweep = now
+
+	for _, sh := range s.shards {
 		sh.mu.Lock()
+		if s.opts.eviction == EvictLRU {
+			s.cleanupLRU(sh, now)
+		} else {
+			s.cleanupMap(sh, now)
+		}
+		sh.mu.Unlock()
 	}
 }
 

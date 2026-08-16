@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/themarchrain/kaka"
@@ -12,7 +11,6 @@ var _ kaka.Limiter = (*SlidingWindow)(nil)
 
 // SlidingWindow is a per-key sliding window log rate limiter.
 type SlidingWindow struct {
-	mu     sync.Mutex
 	limit  int           // 窗口内允许的最大请求数
 	window time.Duration // 窗口大小 (如 1 * time.Second)
 	opts   options
@@ -45,10 +43,10 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 		window: window,
 		opts:   o,
 		store: newStateStore[*windowState](o, func(now time.Time) *windowState {
-		return &windowState{
-			logs: make([]time.Time, 0),
-		}
-	}),
+			return &windowState{
+				logs: make([]time.Time, 0),
+			}
+		}),
 	}
 }
 
@@ -57,9 +55,6 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err
 	}
-
-	sw.mu.Lock()
-	defer sw.mu.Unlock()
 
 	now := sw.opts.clock.Now()
 	state, err := sw.store.getOrCreate(key, now)

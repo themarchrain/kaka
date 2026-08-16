@@ -341,9 +341,53 @@ func TestShardedStore_EvictLRU_EmptyTargetShard_EvictsOtherShard(t *testing.T) {
 	}
 }
 
-// ---- differential: identical behavior with 1 vs 64 shards ----
+func TestShardedStore_FullWithExpiredKeysInOtherShards_AllowsNewKey(t *testing.T) {
+	// Regression: per-shard cleanup only scans the accessed shard, but the
+	// maxKeys check is global. A full store whose expired keys live in other
+	// shards must still admit a new key (global sweep on the full path).
+	store := newTestStore(options{
+		maxKeys:         2,
+		keyTTL:          100 * time.Millisecond,
+		cleanupInterval: 10 * time.Millisecond,
+	}, 64, nil)
+	start := time.Now()
 
-// Under the same single-threaded key sequence, 1-shard and 64-shard stores
+	var a, b, c string
+	used := map[uint64]bool{}
+	for i := 0; ; i++ {
+		k := "user:" + strconv.Itoa(i)
+		h := fnv1a64(k) & 63
+		if used[h] {
+			continue
+		}
+		used[h] = true
+		if a == "" {
+			a = k
+		} else if b == "" {
+			b = k
+		} else {
+			c = k
+			break
+		}
+	}
+	if _, err := store.getOrCreate(a, start); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.getOrCreate(b, start); err != nil {
+		t.Fatal(err)
+	}
+	// live=2=maxKeys, c lands on a third (empty) shard; a and b expired
+	// (TTL 100ms) by now -> the global sweep must free slots before the
+	// maxKeys check rejects c.
+	if _, err := store.getOrCreate(c, start.Add(150*time.Millisecond)); err != nil {
+		t.Fatalf("expected expired keys to be swept before maxKeys check, got %v", err)
+	}
+	if store.len() != 1 {
+		t.Fatalf("expected len 1 (only c) after sweep, got %d", store.len())
+	}
+}
+
+// ---- differential: identical behavior with 1 vs 64 shards ----// Under the same single-threaded key sequence, 1-shard and 64-shard stores
 // must agree on success/error outcomes (maxKeys bound and hit semantics;
 // NOT which key is evicted - approximate LRU allows shard-level differences).
 func TestShardedStore_Differential_OneVsManyShards(t *testing.T) {

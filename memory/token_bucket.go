@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/themarchrain/kaka"
@@ -12,7 +11,6 @@ var _ kaka.Limiter = (*TokenBucket)(nil)
 
 // TokenBucket is a per-key token bucket rate limiter.
 type TokenBucket struct {
-	mu       sync.Mutex
 	capacity float64 // 桶的容量（最大突发量）
 	rate     float64 // 令牌放入速率（个/秒）
 	opts     options
@@ -48,11 +46,11 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 		rate:     rate,
 		opts:     o,
 		store: newStateStore[*bucket](o, func(now time.Time) *bucket {
-		return &bucket{
-			tokens:       capacity, // 初始默认满桶
-			lastRefilled: now,
-		}
-	}),
+			return &bucket{
+				tokens:       capacity, // 初始默认满桶
+				lastRefilled: now,
+			}
+		}),
 	}
 }
 
@@ -61,9 +59,6 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 	if err := validateKey(key); err != nil {
 		return kaka.Result{}, err
 	}
-
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
 
 	now := tb.opts.clock.Now()
 	b, err := tb.store.getOrCreate(key, now)
