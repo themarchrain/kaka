@@ -53,6 +53,9 @@ func (o *options) validate() {
 	if o.eviction < EvictReject || o.eviction > EvictLRU {
 		panic("memory: invalid eviction policy")
 	}
+	if o.shards < 1 || o.shards > maxShardCount || o.shards&(o.shards-1) != 0 {
+		panic("memory: shardCount must be a power of two in [1, 1024]")
+	}
 }
 
 // WithMaxKeys sets the maximum number of tracked keys.
@@ -71,4 +74,12 @@ func WithKeyTTL(d time.Duration) Option {
 // Zero uses the default behavior: no cleanup when keyTTL is unset, a 1-minute interval when keyTTL is set.
 func WithCleanupInterval(d time.Duration) Option {
 	return func(o *options) { o.cleanupInterval = d }
+}
+
+// WithShardCount sets the number of internal shards (striped locks) used by
+// the key store. Must be a power of two in [1, 1024]; default 64. More shards
+// reduce lock contention when many keys are accessed concurrently, at a small
+// memory cost for the extra maps.
+func WithShardCount(n int) Option {
+	return func(o *options) { o.shards = n }
 }
