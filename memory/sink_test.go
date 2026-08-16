@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/themarchrain/kaka"
 )
@@ -118,5 +119,39 @@ func TestTokenBucket_WithSink_CountsEviction(t *testing.T) {
 	_, _, _, _, evicts := sink.snapshot()
 	if evicts != 1 {
 		t.Fatalf("expected 1 eviction, got %d", evicts)
+	}
+}
+
+func TestLeakyBucket_WithSink_CountsAllowedRejected(t *testing.T) {
+	sink := &recordingSink{}
+	limiter := NewLeakyBucket(10, 1, WithMetricSink(sink))
+	ctx := context.Background()
+
+	for i := 0; i < 11; i++ {
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	allowed, rejected, errs, _, _ := sink.snapshot()
+	if allowed != 10 || rejected != 1 || errs != 0 {
+		t.Fatalf("expected 10 allowed / 1 rejected / 0 errors, got %d / %d / %d", allowed, rejected, errs)
+	}
+}
+
+func TestSlidingWindow_WithSink_CountsAllowedRejected(t *testing.T) {
+	sink := &recordingSink{}
+	limiter := NewSlidingWindow(10, time.Hour, WithMetricSink(sink))
+	ctx := context.Background()
+
+	for i := 0; i < 11; i++ {
+		if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	allowed, rejected, errs, _, _ := sink.snapshot()
+	if allowed != 10 || rejected != 1 || errs != 0 {
+		t.Fatalf("expected 10 allowed / 1 rejected / 0 errors, got %d / %d / %d", allowed, rejected, errs)
 	}
 }

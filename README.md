@@ -33,6 +33,7 @@ and the hot path runs at **0 allocations**. See the
 - Per-key isolation with `WithMaxKeys`, `WithKeyTTL`, `WithCleanupInterval`.
 - `WithEvictionPolicy`: LRU eviction when the key cap is reached, instead of rejecting new keys.
 - Sharded store (`WithShardCount`): striped locks, so concurrent requests on different keys do not serialize on one mutex.
+- `WithMetricSink`: opt-in observability (allowed/rejected/error/key-count/eviction, tiered for layered) with zero overhead when unused.
 - Zero-allocation hot path for all three algorithms.
 - `net/http` middleware adapter in `middleware/http`.
 - Gin middleware adapter in `middleware/gin`.
