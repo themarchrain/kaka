@@ -51,3 +51,11 @@ temp/
 
 # Development docs
 docs/dev
+
+docs/benchmarks/raw/
+docs/benchmarks/charts/
+
+__pycache__/
+*.pyc
+
+benchmarks/.bench-server-bin

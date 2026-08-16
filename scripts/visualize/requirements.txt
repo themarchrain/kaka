@@ -1,0 +1,6 @@
+# Python dependencies for the benchmark visualization pipeline
+# (scripts/visualize). Install with:
+#   python -m pip install -r scripts/visualize/requirements.txt
+# Prefer a virtual environment (venv) so global site-packages stay untouched.
+matplotlib>=3.10
+pandas>=2.2

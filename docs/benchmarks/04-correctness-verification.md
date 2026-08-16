@@ -1,4 +1,5 @@
 # 04. Correctness Verification
+> Charts: [04_correctness_matrix.png](charts/04_correctness_matrix.png)
 
 Request-by-request differential testing against the ecosystem, plus
 mathematical invariants for the algorithms that have no counterpart.

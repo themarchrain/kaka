@@ -11,6 +11,35 @@ Performance, resource-usage, and correctness evidence for Kaka, all reproducible
 | [05. LRU eviction](05-lru-eviction.md) | Cost of `WithEvictionPolicy(EvictLRU)`: throughput, memory, semantics | `go test -run TestMemoryFootprintLRU -v ./compare/` |
 | [06. Redis distributed](06-redis.md) | Atomic Lua algorithms, latency / QPS baseline, end-to-end vs in-memory | commands inside |
 
+## Charts
+
+All charts below are rendered from the raw artifacts in `docs/benchmarks/raw/`
+(kept locally, not committed). Regenerate everything with:
+
+```sh
+sh scripts/visualize.sh        # rerun missing data, render all charts
+sh scripts/visualize.sh --full # also rerun the 600 s long-term stability test
+```
+
+| Chart | Report | What it shows | Data source | Reproduce |
+|---|---|---|---|---|
+| `01_algorithm_comparison.png` | 01 | In-memory latency vs ecosystem (log) | `benchmark-*.txt` | `sh scripts/bench.sh` |
+| `02_http_qps.png` | 02 | HTTP QPS kaka vs x/time/rate | `loadtest-*.csv` | `sh scripts/loadtest.sh` |
+| `02_http_latency_percentiles.png` | 02 | p50/p95/p99 latency | `loadtest-*.csv` | `sh scripts/loadtest.sh` |
+| `03_memory_per_key.png` | 03 | Bytes/key kaka vs ulule (log) | `memory-perkey-*.txt` | `sh scripts/bench-memory.sh` |
+| `03_longterm_memory.png` | 03 | HeapAlloc over 10 min | `longterm-mem-*.csv` | `sh scripts/loadtest-long.sh 600` |
+| `04_correctness_matrix.png` | 04 | Verification matrix (differential + invariants) | `correctness-*.txt` | `sh scripts/bench-memory.sh` |
+| `05_lru_throughput.png` | 05 | LRU eviction cost | `lru-*.txt` | `sh scripts/bench-lru.sh` |
+| `05_lru_memory.png` | 05 | LRU memory overhead | `memory-lru-*.txt` | `sh scripts/bench-memory.sh` |
+| `06_redis_concurrency_sweep.png` | 06 | QPS vs concurrency (TB/LB/SW) | `benchmark-redis-sweep-*.txt` | `sh scripts/bench-redis.sh` |
+| `06_redis_baseline.png` | 06 | Per-algorithm EVALSHA latency | `benchmark-redis-*.txt` | `sh scripts/bench-redis.sh` |
+| `06_redis_probe.png` | 06 | GET vs EVALSHA vs ulule probes | `benchmark-redis-*.txt` | `sh scripts/bench-redis.sh` |
+| `07_layered_reject_path.png` | 07 | Local short-circuit vs pure Redis deny | `benchmark-layered-*.txt` | `sh scripts/bench-layered.sh` |
+| `07_layered_http.png` | 07 | End-to-end QPS layered vs redis | `loadtest-redis-*.csv`, `loadtest-layered-*.csv` | `sh scripts/bench-layered.sh` |
+
+Charts live in `docs/benchmarks/charts/` (not committed; regenerate locally).
+Every chart footer states its exact data-source file and reproduce command.
+
 ## Key results
 
 - **Hot path:** 0 allocations for all three algorithms; token bucket runs at

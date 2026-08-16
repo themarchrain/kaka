@@ -1,4 +1,5 @@
 # 01. Benchmark Comparison
+> Charts: [01_algorithm_comparison.png](charts/01_algorithm_comparison.png)
 
 Compares Kaka's in-memory limiters with `golang.org/x/time/rate` (token
 bucket), `github.com/juju/ratelimit` (token bucket), and

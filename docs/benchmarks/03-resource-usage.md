@@ -1,4 +1,5 @@
 # 03. Resource Usage
+> Charts: [03_memory_per_key.png](charts/03_memory_per_key.png) · [03_longterm_memory.png](charts/03_longterm_memory.png)
 
 Per-key memory, allocation rate, and long-term stability, compared with
 `github.com/ulule/limiter/v3` — the only widely used Go limiter with a

@@ -22,6 +22,33 @@ fi
 
 stamp=$(date +%Y%m%d-%H%M%S)
 port=8081
+
+# 可选参数：impl 列表（kaka/xtime/redis/layered/ulule）、显式 many、-z <时长>
+# 零参数 = 历史行为：kaka、xtime 各 -n 100000 -c 100，加 kaka-many
+impls=""
+many=""
+duration_args="-n 100000 -c 100"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -z)
+            duration_args="-z ${2:-10s} -c 100"
+            if [ "$#" -ge 2 ]; then shift 2; else shift 1; fi
+            ;;
+        many)
+            many="kaka"
+            shift 1
+            ;;
+        *)
+            impls="$impls $1"
+            shift 1
+            ;;
+    esac
+done
+if [ -z "$impls" ]; then
+    impls="kaka xtime"
+    many="kaka"
+fi
+
 bin="$root/benchmarks/.bench-server-bin"
 
 # 构建一次，直接运行二进制（go run 的后台子进程 kill 不干净，会残留占用端口）
@@ -65,12 +92,12 @@ run_impl() {
     impl=$1
     echo "==> building bench-server"
     build_server
-    echo "==> starting bench-server ($impl)"
+    echo "==> starting bench-server ($impl, REDIS_ADDR=${REDIS_ADDR:-unset})"
     start_server "$impl" --impl "$impl" --addr "127.0.0.1:$port"
 
     out="$out_dir/loadtest-$impl-$stamp.csv"
-    echo "==> hey -n 100000 -c 100 ($impl)"
-    hey -n 100000 -c 100 -m GET -o csv "http://127.0.0.1:$port/api/test" > "$out"
+    echo "==> hey $duration_args ($impl)"
+    hey $duration_args -m GET -o csv "http://127.0.0.1:$port/api/test" > "$out"
     echo "saved: $out"
 
     stop_server
@@ -85,13 +112,16 @@ run_impl_many() {
     start_server "$impl" --impl "$impl" --keymode many --addr "127.0.0.1:$port"
 
     out="$out_dir/loadtest-$impl-many-$stamp.csv"
-    echo "==> hey -n 100000 -c 100 (many-key, $impl)"
-    hey -n 100000 -c 100 -m GET -o csv "http://127.0.0.1:$port/api/test" > "$out"
+    echo "==> hey $duration_args (many-key, $impl)"
+    hey $duration_args -m GET -o csv "http://127.0.0.1:$port/api/test" > "$out"
     echo "saved: $out"
 
     stop_server
 }
 
-run_impl kaka
-run_impl xtime
-run_impl_many kaka
+for impl in $impls; do
+    run_impl "$impl"
+done
+if [ -n "$many" ]; then
+    run_impl_many "$many"
+fi

@@ -1,4 +1,5 @@
 # 05. LRU Eviction
+> Charts: [05_lru_throughput.png](charts/05_lru_throughput.png) · [05_lru_memory.png](charts/05_lru_memory.png)
 
 `WithEvictionPolicy(EvictLRU)` — when the key cap is reached, evict the
 least-recently-used key to make room for new ones, instead of rejecting.

@@ -1,4 +1,5 @@
 # 06. Redis Distributed Rate Limiting
+> Charts: [06_redis_concurrency_sweep.png](charts/06_redis_concurrency_sweep.png) · [06_redis_baseline.png](charts/06_redis_baseline.png) · [06_redis_probe.png](charts/06_redis_probe.png)
 
 > Measured: Go 1.25.1 · Redis 7-alpine (Docker, local) · Intel i7-13620H
 > Reproduce: see commands at the bottom
