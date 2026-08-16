@@ -15,6 +15,9 @@ type stateStore[T any] interface {
 	// withState runs fn with the key's state under the store's lock, so the
 	// per-key mutation (refill math, log append) is serialized per key.
 	withState(key string, now time.Time, fn func(T, time.Time) (kaka.Result, error)) (kaka.Result, error)
+	// drainEvictions reports pending LRU evictions and fires the sink
+	// callback for each; must be called outside any shard lock.
+	drainEvictions() int
 	len() int
 }
 

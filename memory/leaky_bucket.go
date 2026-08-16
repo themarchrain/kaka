@@ -80,6 +80,7 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 			lb.opts.sink.OnRejected(kaka.TierSingle, result)
 		}
 		lb.opts.sink.SetKeys(kaka.TierSingle, lb.store.len())
+		lb.store.drainEvictions()
 	}
 	return result, err
 }

@@ -58,7 +58,9 @@ func WithOnError(fn func(err error)) Option {
 
 // WithMetricSink registers a sink that receives decision events. Zero value
 // (nil) disables reporting with no hot-path cost. Sink errors are counted in
-// addition to (not instead of) the WithOnError callback.
+// addition to (not instead of) the WithOnError callback. Under ErrorFailOpen
+// a single degraded request emits both OnError and OnAllowed (the error and
+// the final decision are reported independently).
 func WithMetricSink(sink kaka.MetricSink) Option {
 	return func(o *Options) { o.sink = sink }
 }

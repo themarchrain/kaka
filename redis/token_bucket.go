@@ -21,7 +21,7 @@ var _ kaka.Limiter = (*TokenBucket)(nil)
 // tokens per second, and on denial RetryAfter is the time to refill one token.
 type TokenBucket struct {
 	base     *limiter
-	script   *Script
+	script   scriptRunner
 	capacity float64
 	rate     float64
 }

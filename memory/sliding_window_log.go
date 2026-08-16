@@ -77,6 +77,7 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 			sw.opts.sink.OnRejected(kaka.TierSingle, result)
 		}
 		sw.opts.sink.SetKeys(kaka.TierSingle, sw.store.len())
+		sw.store.drainEvictions()
 	}
 	return result, err
 }

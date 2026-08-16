@@ -20,7 +20,7 @@ var _ kaka.Limiter = (*LeakyBucket)(nil)
 // drops per second, overflow is denied, and RetryAfter is the time to leak the overflow.
 type LeakyBucket struct {
 	base     *limiter
-	script   *Script
+	script   scriptRunner
 	capacity float64
 	rate     float64
 }

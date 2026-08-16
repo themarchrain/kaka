@@ -81,6 +81,7 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 			tb.opts.sink.OnRejected(kaka.TierSingle, result)
 		}
 		tb.opts.sink.SetKeys(kaka.TierSingle, tb.store.len())
+		tb.store.drainEvictions()
 	}
 	return result, err
 }

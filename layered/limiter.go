@@ -102,7 +102,7 @@ func (l *Limiter) remoteAllow(ctx context.Context, key string) (kaka.Result, err
 	remoteResult, err := l.remote.Allow(ctx, key)
 	if err != nil {
 		l.emitError(kaka.TierRemote, err)
-		return kaka.Result{}, err
+		return remoteResult, err
 	}
 	l.emit(kaka.TierRemote, remoteResult)
 	return remoteResult, nil

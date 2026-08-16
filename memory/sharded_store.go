@@ -38,7 +38,8 @@ type shardedStore[T any] struct {
 	create    func(time.Time) T
 	sweepMu   sync.Mutex // guards lastSweep; acquired before any shard lock
 	lastSweep time.Time  // global rate limit for sweepExpired
-	onEvict   func()     // optional; called after an LRU eviction
+	evicts    atomic.Int64 // pending evictions, drained outside shard locks
+	onEvict   func()       // optional; fired per drained eviction, never under a shard lock
 }
 
 const (
@@ -278,9 +279,7 @@ func (s *shardedStore[T]) evictFrom(sh *shard[T]) bool {
 	delete(sh.orderItems, entry.key)
 	sh.order.Remove(elem)
 	s.live.Add(-1)
-	if s.onEvict != nil {
-		s.onEvict()
-	}
+	s.evicts.Add(1)
 	return true
 }
 
@@ -347,4 +346,16 @@ func (s *shardedStore[T]) cleanupLRU(sh *shard[T], now time.Time) {
 
 func (s *shardedStore[T]) len() int {
 	return int(s.live.Load())
+}
+
+// drainEvictions returns the pending eviction count and fires onEvict once
+// per eviction. The caller must not hold any shard lock: sink callbacks run
+// here, and a callback that re-enters the limiter must be able to acquire
+// the shard locks.
+func (s *shardedStore[T]) drainEvictions() int {
+	n := int(s.evicts.Swap(0))
+	for i := 0; i < n && s.onEvict != nil; i++ {
+		s.onEvict()
+	}
+	return n
 }

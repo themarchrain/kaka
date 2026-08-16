@@ -22,7 +22,7 @@ var _ kaka.Limiter = (*SlidingWindow)(nil)
 // and on denial RetryAfter is when the oldest request expires.
 type SlidingWindow struct {
 	base   *limiter
-	script *Script
+	script scriptRunner
 	limit  int
 	window time.Duration
 }
