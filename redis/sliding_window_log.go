@@ -48,6 +48,7 @@ func NewSlidingWindow(client *redis.Client, limit int, window time.Duration, opt
 // ErrorPolicy; argument validation errors are returned explicitly.
 func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
+		sw.base.emitError(err)
 		return kaka.Result{}, err
 	}
 
@@ -57,22 +58,35 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (kaka.Result, er
 		[]string{sw.base.keyFor(key)},
 		sw.limit, sw.window.Milliseconds(), sw.base.opts.keyTTL.Milliseconds(), member)
 	if err != nil {
-		return sw.base.fallback(err), nil
+		sw.base.emitError(err)
+		result := sw.base.fallback(err)
+		sw.base.emit(result)
+		return result, nil
 	}
 
 	arr, ok := res.([]interface{})
 	if !ok || len(arr) != 3 {
-		return sw.base.fallback(fmt.Errorf("%w: unexpected result type %T", ErrScript, res)), nil
+		wrap := fmt.Errorf("%w: unexpected result type %T", ErrScript, res)
+		sw.base.emitError(wrap)
+		result := sw.base.fallback(wrap)
+		sw.base.emit(result)
+		return result, nil
 	}
 	allowed, ok1 := arr[0].(int64)
 	remaining, ok2 := arr[1].(int64)
 	retryMs, ok3 := arr[2].(int64)
 	if !ok1 || !ok2 || !ok3 {
-		return sw.base.fallback(fmt.Errorf("%w: unexpected result element type %T", ErrScript, res)), nil
+		wrap := fmt.Errorf("%w: unexpected result element type %T", ErrScript, res)
+		sw.base.emitError(wrap)
+		result := sw.base.fallback(wrap)
+		sw.base.emit(result)
+		return result, nil
 	}
-	return kaka.Result{
+	result := kaka.Result{
 		Allowed:    allowed == 1,
 		Remaining:  remaining,
 		RetryAfter: time.Duration(retryMs) * time.Millisecond,
-	}, nil
+	}
+	sw.base.emit(result)
+	return result, nil
 }

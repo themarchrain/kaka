@@ -46,6 +46,7 @@ func NewLeakyBucket(client *redis.Client, capacity, rate float64, opts ...Option
 // ErrorPolicy; argument validation errors are returned explicitly.
 func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
+		lb.base.emitError(err)
 		return kaka.Result{}, err
 	}
 
@@ -54,22 +55,35 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (kaka.Result, erro
 		[]string{lb.base.keyFor(key)},
 		lb.capacity, lb.rate, ttlMs)
 	if err != nil {
-		return lb.base.fallback(err), nil
+		lb.base.emitError(err)
+		result := lb.base.fallback(err)
+		lb.base.emit(result)
+		return result, nil
 	}
 
 	arr, ok := res.([]interface{})
 	if !ok || len(arr) != 3 {
-		return lb.base.fallback(fmt.Errorf("%w: unexpected result type %T", ErrScript, res)), nil
+		wrap := fmt.Errorf("%w: unexpected result type %T", ErrScript, res)
+		lb.base.emitError(wrap)
+		result := lb.base.fallback(wrap)
+		lb.base.emit(result)
+		return result, nil
 	}
 	allowed, ok1 := arr[0].(int64)
 	remaining, ok2 := arr[1].(int64)
 	retryMs, ok3 := arr[2].(int64)
 	if !ok1 || !ok2 || !ok3 {
-		return lb.base.fallback(fmt.Errorf("%w: unexpected result element type %T", ErrScript, res)), nil
+		wrap := fmt.Errorf("%w: unexpected result element type %T", ErrScript, res)
+		lb.base.emitError(wrap)
+		result := lb.base.fallback(wrap)
+		lb.base.emit(result)
+		return result, nil
 	}
-	return kaka.Result{
+	result := kaka.Result{
 		Allowed:    allowed == 1,
 		Remaining:  remaining,
 		RetryAfter: time.Duration(retryMs) * time.Millisecond,
-	}, nil
+	}
+	lb.base.emit(result)
+	return result, nil
 }

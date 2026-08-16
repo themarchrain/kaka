@@ -1,6 +1,10 @@
 package redis
 
-import "time"
+import (
+	"time"
+
+	"github.com/themarchrain/kaka"
+)
 
 // ErrorPolicy decides how the limiter degrades when an underlying Redis call fails.
 type ErrorPolicy int
@@ -18,6 +22,7 @@ type Options struct {
 	keyTTL    time.Duration
 	policy    ErrorPolicy
 	onError   func(err error)
+	sink      kaka.MetricSink
 }
 
 // Option configures a Redis limiter.
@@ -49,4 +54,11 @@ func WithErrorPolicy(policy ErrorPolicy) Option {
 // WithOnError registers an error callback, called regardless of the policy (safe with a nil function).
 func WithOnError(fn func(err error)) Option {
 	return func(o *Options) { o.onError = fn }
+}
+
+// WithMetricSink registers a sink that receives decision events. Zero value
+// (nil) disables reporting with no hot-path cost. Sink errors are counted in
+// addition to (not instead of) the WithOnError callback.
+func WithMetricSink(sink kaka.MetricSink) Option {
+	return func(o *Options) { o.sink = sink }
 }
