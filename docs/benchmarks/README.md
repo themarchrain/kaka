@@ -10,6 +10,8 @@ Performance, resource-usage, and correctness evidence for Kaka, all reproducible
 | [04. Correctness verification](04-correctness-verification.md) | Request-by-request differential tests + algorithm invariants | commands inside |
 | [05. LRU eviction](05-lru-eviction.md) | Cost of `WithEvictionPolicy(EvictLRU)`: throughput, memory, semantics | `go test -run TestMemoryFootprintLRU -v ./compare/` |
 | [06. Redis distributed](06-redis.md) | Atomic Lua algorithms, latency / QPS baseline, end-to-end vs in-memory | commands inside |
+| [07. Layered](07-layered.md) | Local short-circuit vs pure Redis deny, end-to-end layered | commands inside |
+| [08. Multi-key concurrency](08-multikey-concurrency.md) | Sharded store vs global lock: multi-key throughput, speedup | `sh scripts/bench-multikey.sh` |
 
 ## Charts
 
@@ -36,6 +38,8 @@ sh scripts/visualize.sh --full # also rerun the 600 s long-term stability test
 | `06_redis_probe.png` | 06 | GET vs EVALSHA vs ulule probes | `benchmark-redis-*.txt` | `sh scripts/bench-redis.sh` |
 | `07_layered_reject_path.png` | 07 | Local short-circuit vs pure Redis deny | `benchmark-layered-*.txt` | `sh scripts/bench-layered.sh` |
 | `07_layered_http.png` | 07 | End-to-end QPS layered vs redis | `loadtest-redis-*.csv`, `loadtest-layered-*.csv` | `sh scripts/bench-layered.sh` |
+| `08_multikey_throughput.png` | 08 | Multi-key throughput, v0.3.0 vs v0.4.0 | `benchmark-multikey-*.txt` (+ archived baseline) | `sh scripts/bench-multikey.sh` |
+| `08_multikey_speedup.png` | 08 | Speedup ratio per key set (auto-computed) | `benchmark-multikey-*.txt` (+ archived baseline) | `sh scripts/bench-multikey.sh` |
 
 Charts live in `docs/benchmarks/charts/` (not committed; regenerate locally).
 Every chart footer states its exact data-source file and reproduce command.
