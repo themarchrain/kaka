@@ -21,11 +21,13 @@ type options struct {
 	cleanupInterval time.Duration
 	clock           clock
 	eviction        EvictionPolicy
+	shards          int
 }
 
 func defaultOptions() options {
 	return options{
-		clock: realClock{},
+		clock:  realClock{},
+		shards: defaultShardCount,
 	}
 }
 
