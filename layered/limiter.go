@@ -39,18 +39,37 @@ var _ kaka.Limiter = (*Limiter)(nil)
 type Limiter struct {
 	local  kaka.Limiter
 	remote kaka.Limiter
+	sink   kaka.MetricSink
 }
 
 // New creates a two-tier limiter that consults local first and remote
 // second. It panics if either argument is nil.
-func New(local, remote kaka.Limiter) *Limiter {
+func New(local, remote kaka.Limiter, opts ...Option) *Limiter {
 	if local == nil {
 		panic("layered: local limiter must not be nil")
 	}
 	if remote == nil {
 		panic("layered: remote limiter must not be nil")
 	}
-	return &Limiter{local: local, remote: remote}
+	o := options{}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return &Limiter{local: local, remote: remote, sink: o.sink}
+}
+
+// Option configures a layered limiter.
+type Option func(*options)
+
+type options struct {
+	sink kaka.MetricSink
+}
+
+// WithMetricSink registers a sink that receives tiered decision events
+// (TierLocal for local-layer outcomes, TierRemote for remote-layer
+// outcomes). Zero value (nil) disables reporting with no hot-path cost.
+func WithMetricSink(sink kaka.MetricSink) Option {
+	return func(o *options) { o.sink = sink }
 }
 
 // Allow reports whether key is permitted. It returns ErrInvalidKey when the
@@ -58,6 +77,7 @@ func New(local, remote kaka.Limiter) *Limiter {
 // two-tier decision rules.
 func (l *Limiter) Allow(ctx context.Context, key string) (kaka.Result, error) {
 	if err := validateKey(key); err != nil {
+		l.emitError(kaka.TierSingle, err)
 		return kaka.Result{}, err
 	}
 
@@ -66,11 +86,41 @@ func (l *Limiter) Allow(ctx context.Context, key string) (kaka.Result, error) {
 		// The local layer is an optimization, not a correctness gate: any
 		// local failure (e.g. memory.ErrMaxKeysExceeded) falls through to
 		// the authoritative remote layer instead of surfacing a local-only
-		// error.
-		return l.remote.Allow(ctx, key)
+		// error. The failure is still observable via the sink.
+		l.emitError(kaka.TierLocal, err)
+		return l.remoteAllow(ctx, key)
 	}
 	if !localResult.Allowed {
+		l.emit(kaka.TierLocal, localResult)
 		return localResult, nil
 	}
-	return l.remote.Allow(ctx, key)
+	return l.remoteAllow(ctx, key)
+}
+
+// remoteAllow consults the remote layer and reports its outcome.
+func (l *Limiter) remoteAllow(ctx context.Context, key string) (kaka.Result, error) {
+	remoteResult, err := l.remote.Allow(ctx, key)
+	if err != nil {
+		l.emitError(kaka.TierRemote, err)
+		return kaka.Result{}, err
+	}
+	l.emit(kaka.TierRemote, remoteResult)
+	return remoteResult, nil
+}
+
+func (l *Limiter) emit(tier string, result kaka.Result) {
+	if l.sink == nil {
+		return
+	}
+	if result.Allowed {
+		l.sink.OnAllowed(tier, result)
+	} else {
+		l.sink.OnRejected(tier, result)
+	}
+}
+
+func (l *Limiter) emitError(tier string, err error) {
+	if l.sink != nil {
+		l.sink.OnError(tier, err)
+	}
 }
