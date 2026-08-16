@@ -3,6 +3,8 @@ package memory
 import (
 	"errors"
 	"time"
+
+	"github.com/themarchrain/kaka"
 )
 
 // ErrMaxKeysExceeded is returned when maxKeys is reached and the requested key is new.
@@ -22,6 +24,7 @@ type options struct {
 	clock           clock
 	eviction        EvictionPolicy
 	shards          int
+	sink            kaka.MetricSink
 }
 
 func defaultOptions() options {
@@ -82,4 +85,11 @@ func WithCleanupInterval(d time.Duration) Option {
 // memory cost for the extra maps.
 func WithShardCount(n int) Option {
 	return func(o *options) { o.shards = n }
+}
+
+// WithMetricSink registers a sink that receives decision events (allowed,
+// rejected, errors, key count, evictions). Zero value (nil) disables
+// reporting with no hot-path cost.
+func WithMetricSink(sink kaka.MetricSink) Option {
+	return func(o *options) { o.sink = sink }
 }
