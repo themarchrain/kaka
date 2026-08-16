@@ -90,9 +90,10 @@ func (s *shardedStore[T]) withState(key string, now time.Time, fn func(T, time.T
 	return fn(v, now)
 }
 
-// getOrCreate returns the key's state, creating it if absent. It is a thin
-// wrapper over withState for tests and direct store users; limiters use
-// withState directly so their mutation runs under the lock.
+// getOrCreate returns the key's state, creating it if absent. Test-only: it
+// returns a raw pointer with no lock held, so production code must use
+// withState instead (mutating the returned state outside the lock would
+// reintroduce the same-key data race). Not part of the stateStore interface.
 func (s *shardedStore[T]) getOrCreate(key string, now time.Time) (T, error) {
 	var out T
 	_, err := s.withState(key, now, func(v T, _ time.Time) (kaka.Result, error) {

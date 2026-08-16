@@ -7,9 +7,11 @@ import (
 )
 
 // stateStore is the per-key state storage interface used by the limiters.
-// Implementations must be safe for concurrent use.
+// Implementations must be safe for concurrent use. The interface deliberately
+// exposes only withState: returning a raw state pointer (getOrCreate-style)
+// would let callers mutate per-key state outside the shard lock and reintroduce
+// the same-key data race (see the withState contract below).
 type stateStore[T any] interface {
-	getOrCreate(key string, now time.Time) (T, error)
 	// withState runs fn with the key's state under the store's lock, so the
 	// per-key mutation (refill math, log append) is serialized per key.
 	withState(key string, now time.Time, fn func(T, time.Time) (kaka.Result, error)) (kaka.Result, error)
