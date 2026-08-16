@@ -115,7 +115,11 @@ See `examples/gin-example` for a runnable Gin server.
 ## Documentation
 
 - [Performance & correctness reports](docs/benchmarks/) — benchmarks, load
-  tests, resource usage, and differential correctness verification.
+  tests, resource usage, and differential correctness verification. Every
+  report has companion charts rendered from the raw measurement artifacts
+  (see the [charts index](docs/benchmarks/README.md#charts)); regenerate
+  everything with `sh scripts/visualize.sh` (requires Python + matplotlib +
+  pandas, see `scripts/visualize/requirements.txt`).
 
 ## Redis (Distributed)
 
@@ -199,6 +203,7 @@ Completed:
 - v0.1.0: Redis-backed limiters (atomic Lua scripts, distributed)
 - v0.1.1: English API documentation
 - v0.2.0: Layered rate limiting (local pre-check + Redis authority)
+- v0.3.0: Benchmark visualization (Python chart pipeline, one-shot regenerate)
 
 Planned: metrics and management APIs — behind the same `Limiter` / `Result`
 contract.
