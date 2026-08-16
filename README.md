@@ -32,6 +32,7 @@ and the hot path runs at **0 allocations**. See the
 - Three in-memory algorithms: token bucket, leaky bucket, sliding window log.
 - Per-key isolation with `WithMaxKeys`, `WithKeyTTL`, `WithCleanupInterval`.
 - `WithEvictionPolicy`: LRU eviction when the key cap is reached, instead of rejecting new keys.
+- Sharded store (`WithShardCount`): striped locks, so concurrent requests on different keys do not serialize on one mutex.
 - Zero-allocation hot path for all three algorithms.
 - `net/http` middleware adapter in `middleware/http`.
 - Gin middleware adapter in `middleware/gin`.
@@ -211,6 +212,7 @@ Completed:
 - v0.1.1: English API documentation
 - v0.2.0: Layered rate limiting (local pre-check + Redis authority)
 - v0.3.0: Benchmark visualization (Python chart pipeline, one-shot regenerate)
+- v0.4.0: Sharded store (striped locks, multi-key concurrency)
 
 Planned: metrics and management APIs — behind the same `Limiter` / `Result`
 contract.
