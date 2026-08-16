@@ -138,3 +138,55 @@ func TestMiddlewarePanicsWithoutLimiter(t *testing.T) {
 	}()
 	echomiddleware.NewLimiterMiddleware(echomiddleware.Config{})
 }
+
+func TestMiddlewareUsesClientIPByDefault(t *testing.T) {
+	limiter := &stubLimiter{result: kaka.Result{Allowed: true}}
+	router := newTestRouter(limiter, nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	// httptest.NewRequest 的默认 RemoteAddr 是 192.0.2.1:1234，RealIP() 取主机部分。
+	if limiter.key != "192.0.2.1" {
+		t.Fatalf("expected default key 192.0.2.1 (RealIP), got %q", limiter.key)
+	}
+}
+
+func TestMiddlewareStopsChainAfterDeny(t *testing.T) {
+	limiter := &stubLimiter{result: kaka.Result{Allowed: false}}
+	nextCalled := false
+	router := newTestRouter(limiter, nil)
+	// 用自定义路由验证 deny 后不进入 handler（默认 denied handler 直接响应）。
+	cfg := echomiddleware.Config{Limiter: limiter}
+	router = echo.New()
+	router.Use(echomiddleware.NewLimiterMiddleware(cfg))
+	router.GET("/", func(c echo.Context) error {
+		nextCalled = true
+		return c.String(http.StatusOK, "ok")
+	})
+	rec := doGet(router)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+	if nextCalled {
+		t.Fatal("expected handler NOT to run after denial")
+	}
+}
+
+func TestMiddlewareStopsChainAfterError(t *testing.T) {
+	limiter := &stubLimiter{err: errors.New("boom")}
+	nextCalled := false
+	cfg := echomiddleware.Config{Limiter: limiter}
+	router := echo.New()
+	router.Use(echomiddleware.NewLimiterMiddleware(cfg))
+	router.GET("/", func(c echo.Context) error {
+		nextCalled = true
+		return c.String(http.StatusOK, "ok")
+	})
+	rec := doGet(router)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected fail-open 200, got %d", rec.Code)
+	}
+	if !nextCalled {
+		t.Fatal("expected handler to run on fail-open")
+	}
+}

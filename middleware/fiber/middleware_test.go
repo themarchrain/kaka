@@ -147,3 +147,57 @@ func TestMiddlewarePanicsWithoutLimiter(t *testing.T) {
 	}()
 	fibermiddleware.NewLimiterMiddleware(fibermiddleware.Config{})
 }
+
+func TestMiddlewareUsesClientIPByDefault(t *testing.T) {
+	limiter := &stubLimiter{result: kaka.Result{Allowed: true}}
+	app := newTestApp(limiter, nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.9")
+	// 默认配置下 fiber IP() 不信任代理头，返回 socket 远端 IP（app.Test 下为 0.0.0.0）。
+	// 断言"非空且不等于伪造的 XFF"即可验证默认路径真实走通。
+	resp, _ := app.Test(req)
+	resp.Body.Close()
+	if limiter.key == "" || limiter.key == "203.0.113.9" {
+		t.Fatalf("expected default socket IP (not XFF), got %q", limiter.key)
+	}
+}
+
+func TestMiddlewareStopsChainAfterDeny(t *testing.T) {
+	limiter := &stubLimiter{result: kaka.Result{Allowed: false}}
+	nextCalled := false
+	cfg := fibermiddleware.Config{Limiter: limiter}
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app.Use(fibermiddleware.NewLimiterMiddleware(cfg))
+	app.Get("/", func(c *fiber.Ctx) error {
+		nextCalled = true
+		return c.SendString("ok")
+	})
+	resp := doGet(app)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", resp.StatusCode)
+	}
+	if nextCalled {
+		t.Fatal("expected handler NOT to run after denial")
+	}
+}
+
+func TestMiddlewareStopsChainAfterError(t *testing.T) {
+	limiter := &stubLimiter{err: errors.New("boom")}
+	nextCalled := false
+	cfg := fibermiddleware.Config{Limiter: limiter}
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app.Use(fibermiddleware.NewLimiterMiddleware(cfg))
+	app.Get("/", func(c *fiber.Ctx) error {
+		nextCalled = true
+		return c.SendString("ok")
+	})
+	resp := doGet(app)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected fail-open 200, got %d", resp.StatusCode)
+	}
+	if !nextCalled {
+		t.Fatal("expected handler to run on fail-open")
+	}
+}
