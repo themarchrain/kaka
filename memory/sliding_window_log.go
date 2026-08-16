@@ -47,6 +47,10 @@ func NewSlidingWindow(limit int, window time.Duration, opts ...Option) *SlidingW
 			return &windowState{
 				logs: make([]time.Time, 0),
 			}
+		}, func() {
+			if o.sink != nil {
+				o.sink.OnEvict(kaka.TierSingle)
+			}
 		}),
 	}
 	sw.record = sw.recordAndDecide

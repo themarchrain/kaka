@@ -101,3 +101,22 @@ func TestTokenBucket_NoSink_IsNoop(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestTokenBucket_WithSink_CountsEviction(t *testing.T) {
+	sink := &recordingSink{}
+	limiter := NewTokenBucket(10, 1, WithMaxKeys(1), WithEvictionPolicy(EvictLRU), WithMetricSink(sink))
+	ctx := context.Background()
+
+	if _, err := limiter.Allow(ctx, "user:1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 满 + 新 key → 淘汰 user:1 腾位。
+	if _, err := limiter.Allow(ctx, "user:2"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, _, _, _, evicts := sink.snapshot()
+	if evicts != 1 {
+		t.Fatalf("expected 1 eviction, got %d", evicts)
+	}
+}

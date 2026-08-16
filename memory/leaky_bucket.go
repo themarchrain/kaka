@@ -50,6 +50,10 @@ func NewLeakyBucket(capacity, rate float64, opts ...Option) *LeakyBucket {
 				water:    0, // 初始空桶
 				lastLeak: now,
 			}
+		}, func() {
+			if o.sink != nil {
+				o.sink.OnEvict(kaka.TierSingle)
+			}
 		}),
 	}
 	lb.leak = lb.leakAndDecide

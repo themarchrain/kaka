@@ -51,6 +51,10 @@ func NewTokenBucket(capacity, rate float64, opts ...Option) *TokenBucket {
 				tokens:       capacity, // 初始默认满桶
 				lastRefilled: now,
 			}
+		}, func() {
+			if o.sink != nil {
+				o.sink.OnEvict(kaka.TierSingle)
+			}
 		}),
 	}
 	tb.refill = tb.refillAndDecide
