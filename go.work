@@ -1,12 +1,16 @@
-go 1.25.0
+go 1.25.1
 
 use (
 	.
 	./benchmarks
+	./examples/echo-example
+	./examples/fiber-example
 	./examples/gin-example
 	./examples/http-example
 	./examples/redis-example
 	./layered
+	./middleware/echo
+	./middleware/fiber
 	./middleware/gin
 	./redis
 )

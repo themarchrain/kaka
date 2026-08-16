@@ -121,6 +121,31 @@ router.Use(ginmiddleware.NewLimiterMiddleware(ginmiddleware.Config{
 
 See `examples/gin-example` for a runnable Gin server.
 
+## Echo Middleware
+
+```go
+e.Use(echomiddleware.NewLimiterMiddleware(echomiddleware.Config{
+    Limiter: limiter,
+}))
+```
+
+See `examples/echo-example` for a runnable Echo server.
+
+## Fiber Middleware
+
+```go
+app.Use(fibermiddleware.NewLimiterMiddleware(fibermiddleware.Config{
+    Limiter: limiter,
+}))
+```
+
+See `examples/fiber-example` for a runnable Fiber server.
+
+All framework adapters share the same behavior: the limiter key defaults to
+the framework-native client IP, denied requests get a 429 JSON response with
+`Retry-After`, limiter errors fail open by default, and `X-RateLimit-*`
+headers are written unless `DisableHeaders` is set.
+
 ## Documentation
 
 - [Performance & correctness reports](docs/benchmarks/) — benchmarks, load
@@ -215,6 +240,7 @@ Completed:
 - v0.3.0: Benchmark visualization (Python chart pipeline, one-shot regenerate)
 - v0.4.0: Sharded store (striped locks, multi-key concurrency)
 - v0.4.1: Metrics observability (MetricSink, tiered layered reporting)
+- v0.4.2: Echo/Fiber middleware adapters
 
 Planned: metrics and management APIs — behind the same `Limiter` / `Result`
 contract.

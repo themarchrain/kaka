@@ -22,10 +22,14 @@ root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
 modules="
 .
+middleware/echo
+middleware/fiber
 middleware/gin
 middleware/http
-examples/http-example
+examples/echo-example
+examples/fiber-example
 examples/gin-example
+examples/http-example
 examples/redis-example
 benchmarks
 redis
