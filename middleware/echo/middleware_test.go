@@ -73,7 +73,7 @@ func TestMiddlewareUsesCustomDeniedHandler(t *testing.T) {
 	router := newTestRouter(limiter, &echomiddleware.Config{
 		DeniedHandler: func(c echo.Context) {
 			called = true
-			c.String(http.StatusForbidden, "nope")
+			_ = c.String(http.StatusForbidden, "nope")
 		},
 	})
 	rec := doGet(router)
@@ -91,7 +91,7 @@ func TestMiddlewareUsesErrorHandler(t *testing.T) {
 	router := newTestRouter(limiter, &echomiddleware.Config{
 		ErrorHandler: func(c echo.Context, err error) {
 			called = true
-			c.String(http.StatusInternalServerError, "err")
+			_ = c.String(http.StatusInternalServerError, "err")
 		},
 	})
 	rec := doGet(router)
@@ -154,10 +154,9 @@ func TestMiddlewareUsesClientIPByDefault(t *testing.T) {
 func TestMiddlewareStopsChainAfterDeny(t *testing.T) {
 	limiter := &stubLimiter{result: kaka.Result{Allowed: false}}
 	nextCalled := false
-	router := newTestRouter(limiter, nil)
 	// 用自定义路由验证 deny 后不进入 handler（默认 denied handler 直接响应）。
 	cfg := echomiddleware.Config{Limiter: limiter}
-	router = echo.New()
+	router := echo.New()
 	router.Use(echomiddleware.NewLimiterMiddleware(cfg))
 	router.GET("/", func(c echo.Context) error {
 		nextCalled = true

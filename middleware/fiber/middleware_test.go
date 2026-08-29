@@ -77,7 +77,7 @@ func TestMiddlewareUsesCustomDeniedHandler(t *testing.T) {
 	app := newTestApp(limiter, &fibermiddleware.Config{
 		DeniedHandler: func(c *fiber.Ctx) {
 			called = true
-			c.Status(http.StatusForbidden).SendString("nope")
+			_ = c.Status(http.StatusForbidden).SendString("nope")
 		},
 	})
 	resp := doGet(app)
@@ -96,7 +96,7 @@ func TestMiddlewareUsesErrorHandler(t *testing.T) {
 	app := newTestApp(limiter, &fibermiddleware.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) {
 			called = true
-			c.Status(http.StatusInternalServerError).SendString("err")
+			_ = c.Status(http.StatusInternalServerError).SendString("err")
 		},
 	})
 	resp := doGet(app)

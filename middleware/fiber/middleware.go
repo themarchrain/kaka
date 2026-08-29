@@ -49,7 +49,7 @@ func NewLimiterMiddleware(config Config) fiber.Handler {
 	}
 	if config.DeniedHandler == nil {
 		config.DeniedHandler = func(c *fiber.Ctx) {
-			c.Status(http.StatusTooManyRequests).JSON(fiber.Map{"error": "too many requests"})
+			_ = c.Status(http.StatusTooManyRequests).JSON(fiber.Map{"error": "too many requests"})
 		}
 	}
 	return func(c *fiber.Ctx) error {
