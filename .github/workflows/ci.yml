@@ -18,8 +18,12 @@ jobs:
       matrix:
         module:
           - .
+          - middleware/echo
+          - middleware/fiber
           - middleware/gin
           - middleware/http
+          - examples/echo-example
+          - examples/fiber-example
           - examples/http-example
           - examples/gin-example
           - benchmarks
